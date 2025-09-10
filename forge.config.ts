@@ -12,7 +12,10 @@ const config: ForgeConfig = {
     asar: true,
     name: 'Secure Chat',
     executableName: 'secure-chat',
-    icon: './assets/icon', // Add an icon if you have one
+    // Add this to ensure proper file copying
+    extraResource: [
+      './dist-renderer'
+    ]
   },
   rebuildConfig: {},
   makers: [
@@ -25,14 +28,17 @@ const config: ForgeConfig = {
   ],
   plugins: [
     new VitePlugin({
+      // Build configuration
       build: [
         {
           entry: 'src/main.ts',
           config: 'vite.main.config.ts',
+          target: 'main',
         },
         {
           entry: 'src/preload.ts',
           config: 'vite.preload.config.ts',
+          target: 'preload',
         },
       ],
       renderer: [

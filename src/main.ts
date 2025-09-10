@@ -58,7 +58,7 @@ class ChatApp {
   }
 
   private setupIPC() {
-    // Crypto operations
+    // Crypto IPC handlers
     ipcMain.handle('crypto:generateIdentity', async () => {
       this.debugManager.info('CryptoEngine', 'Generating identity keys...');
       try {
@@ -70,25 +70,35 @@ class ChatApp {
         throw error;
       }
     });
-    
-    ipcMain.handle('crypto:encrypt', (_, data, publicKey) => this.cryptoEngine.encrypt(data, publicKey));
-    ipcMain.handle('crypto:decrypt', (_, encryptedData) => this.cryptoEngine.decrypt(encryptedData));
-    ipcMain.handle('crypto:getPublicKey', () => this.cryptoEngine.getPublicKey());
-    
-    // Database operations
-    ipcMain.handle('db:saveMessage', (_, message) => this.databaseManager.saveMessage(message));
-    ipcMain.handle('db:getMessages', (_, chatId) => this.databaseManager.getMessages(chatId));
-    ipcMain.handle('db:saveChat', (_, chat) => this.databaseManager.saveChat(chat));
-    ipcMain.handle('db:getChats', () => this.databaseManager.getChats());
-    ipcMain.handle('db:updateChat', (_, chatId, updates) => this.databaseManager.updateChat(chatId, updates));
-    
-    // Permission checks
-    ipcMain.handle('permission:request', (_, permission) => this.permissionBroker.request(permission));
+
+    ipcMain.handle('crypto:encrypt', (_, data, publicKey) => 
+      this.cryptoEngine.encrypt(data, publicKey));
+    ipcMain.handle('crypto:decrypt', (_, encryptedData) => 
+      this.cryptoEngine.decrypt(encryptedData));
+    ipcMain.handle('crypto:getPublicKey', () => 
+      this.cryptoEngine.getPublicKey());
+
+    // Database IPC handlers
+    ipcMain.handle('db:saveMessage', (_, message) => 
+      this.databaseManager.saveMessage(message));
+    ipcMain.handle('db:getMessages', (_, chatId) => 
+      this.databaseManager.getMessages(chatId));
+    ipcMain.handle('db:saveChat', (_, chat) => 
+      this.databaseManager.saveChat(chat));
+    ipcMain.handle('db:getChats', () => 
+      this.databaseManager.getChats());
+    ipcMain.handle('db:updateChat', (_, chatId, updates) => 
+      this.databaseManager.updateChat(chatId, updates));
+
+    // Permission IPC handlers
+    ipcMain.handle('permission:request', (_, permission) => 
+      this.permissionBroker.request(permission));
   }
 
   createWindow() {
     this.debugManager.info('WindowManager', 'Creating main window...');
-    return this.windowManager.createMainWindow();
+    // Fix: Call the correct method name
+    return this.windowManager.createWindow();
   }
 
   async cleanup() {
