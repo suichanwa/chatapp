@@ -1,0 +1,181 @@
+/* Mobile-specific styles */
+.mobile-app {
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-app.has-notch {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Mobile layout adjustments */
+@media (max-width: 768px) {
+  .mobile-layout .app-main {
+    flex-direction: column;
+  }
+
+  .mobile-layout .chat-list {
+    width: 100%;
+    height: 200px;
+    border-right: none;
+    border-bottom: 1px solid #404040;
+    order: 2;
+  }
+
+  .mobile-layout .chat-view {
+    flex: 1;
+    order: 1;
+  }
+
+  .mobile-layout .message-composer {
+    position: sticky;
+    bottom: 0;
+    padding: max(0.5rem, env(safe-area-inset-bottom));
+    background: #2d2d2d;
+    border-top: 1px solid #404040;
+  }
+
+  .mobile-layout .app-header {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+
+  /* Touch-friendly buttons */
+  .mobile-layout button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0.75rem 1rem;
+  }
+
+  /* Better spacing for mobile */
+  .mobile-layout .chat-item {
+    padding: 1.5rem 1rem;
+    border-bottom: 1px solid #333;
+  }
+
+  .mobile-layout .message {
+    max-width: 85%;
+    margin-bottom: 1rem;
+  }
+
+  .mobile-layout .modal-content {
+    width: 95%;
+    margin: 1rem;
+    max-height: 90vh;
+  }
+
+  /* Prevent text selection on mobile */
+  .mobile-layout .chat-list,
+  .mobile-layout .chat-header {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Input field adjustments */
+  .mobile-layout input,
+  .mobile-layout textarea {
+    font-size: 16px; /* Prevents zoom on iOS */
+    border-radius: 8px;
+  }
+
+  /* Message input specific */
+  .mobile-layout #message-input {
+    flex: 1;
+    padding: 1rem;
+    font-size: 16px;
+    border: none;
+    background: #1a1a1a;
+    color: white;
+    border-radius: 20px;
+    margin-right: 0.5rem;
+  }
+
+  .mobile-layout #send-btn {
+    background: #007acc;
+    border: none;
+    padding: 1rem 1.5rem;
+    border-radius: 20px;
+    color: white;
+    font-weight: 600;
+  }
+
+  /* Chat list in mobile - horizontal scroll */
+  .mobile-layout .chat-list {
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+  }
+
+  .mobile-layout #chat-list {
+    display: flex;
+    padding: 0;
+  }
+
+  .mobile-layout .chat-item {
+    display: inline-block;
+    white-space: normal;
+    min-width: 200px;
+    vertical-align: top;
+  }
+}
+
+/* Landscape mode adjustments */
+@media (max-width: 768px) and (orientation: landscape) {
+  .mobile-layout .app-main {
+    flex-direction: row;
+  }
+
+  .mobile-layout .chat-list {
+    width: 300px;
+    height: auto;
+    border-right: 1px solid #404040;
+    border-bottom: none;
+    order: 1;
+  }
+
+  .mobile-layout .chat-view {
+    order: 2;
+  }
+
+  .mobile-layout #chat-list {
+    display: block;
+  }
+
+  .mobile-layout .chat-item {
+    display: block;
+    min-width: auto;
+  }
+}
+
+/* Android-specific adjustments */
+@media (max-width: 768px) and (min-device-pixel-ratio: 1) {
+  .mobile-layout .app-header {
+    padding-top: 1rem;
+  }
+
+  .mobile-layout .message-composer {
+    padding-bottom: 1rem;
+  }
+}
+
+/* Very small screens (old phones) */
+@media (max-width: 480px) {
+  .mobile-layout .chat-item {
+    padding: 1rem 0.5rem;
+    min-width: 150px;
+  }
+
+  .mobile-layout .modal-content {
+    width: 98%;
+    margin: 0.5rem;
+  }
+
+  .mobile-layout .chat-name {
+    font-size: 0.9rem;
+  }
+
+  .mobile-layout .chat-preview {
+    font-size: 0.7rem;
+  }
+}

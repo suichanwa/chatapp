@@ -9,7 +9,16 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
-    "lint": "eslint --ext .ts,.tsx ."
+    "lint": "eslint --ext .ts,.tsx .",
+    "build": "vite build --config vite.renderer.config.ts",
+    "build:mobile": "vite build --config vite.mobile.config.ts && npm run mobile:fix-index",
+    "mobile:fix-index": "copy dist-mobile\\mobile.html dist-mobile\\index.html",
+    "mobile:sync": "npm run build:mobile && npx cap sync",
+    "mobile:android": "npm run build:mobile && npx cap sync && npx cap open android",
+    "mobile:build": "npm run build:mobile && npx cap sync && npx cap build android",
+    "cap:add": "npx cap add",
+    "cap:sync": "npx cap sync",
+    "cap:open": "npx cap open"
   },
   "keywords": [],
   "author": {
@@ -37,6 +46,9 @@
     "vite": "^5.4.20"
   },
   "dependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/cli": "^7.4.3",
+    "@capacitor/core": "^7.4.3",
     "electron-squirrel-startup": "^1.0.1"
   }
 }
