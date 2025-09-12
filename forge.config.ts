@@ -12,10 +12,6 @@ const config: ForgeConfig = {
     asar: true,
     name: 'Secure Chat',
     executableName: 'secure-chat',
-    // Add this to ensure proper file copying
-    extraResource: [
-      './dist-renderer'
-    ]
   },
   rebuildConfig: {},
   makers: [

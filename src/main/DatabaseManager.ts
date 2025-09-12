@@ -3,6 +3,13 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 
+export interface ImageData {
+  filename: string;
+  mimeType: string;
+  size: number;
+  data: string; // Base64 encoded
+}
+
 export interface Message {
   id: string;
   chatId: string;
@@ -16,6 +23,7 @@ export interface Message {
     authTag: string;
     sessionKey?: string;
   };
+  imageData?: ImageData;
 }
 
 export interface Chat {

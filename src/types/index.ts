@@ -10,6 +10,13 @@ export interface EncryptedData {
   sessionKey?: string;
 }
 
+export interface ImageData {
+  filename: string;
+  mimeType: string;
+  size: number;
+  data: string; // Base64 encoded
+}
+
 export interface Message {
   id: string;
   chatId: string;
@@ -18,6 +25,7 @@ export interface Message {
   sender: string;
   encrypted: boolean;
   encryptedData?: EncryptedData;
+  imageData?: ImageData;
 }
 
 export interface Chat {

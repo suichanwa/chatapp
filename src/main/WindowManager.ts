@@ -7,6 +7,7 @@ export class WindowManager {
   constructor() {
     console.log('🖼️ WindowManager: NODE_ENV:', process.env.NODE_ENV);
     console.log('🖼️ WindowManager: __dirname:', __dirname);
+    console.log('🖼️ WindowManager: app.isPackaged:', app.isPackaged);
     console.log('🖼️ WindowManager: process.cwd():', process.cwd());
   }
 
@@ -27,7 +28,7 @@ export class WindowManager {
         experimentalFeatures: false
       },
       titleBarStyle: 'default',
-      show: false, // Don't show until ready
+      show: false,
       icon: this.getIconPath()
     });
 
@@ -51,46 +52,55 @@ export class WindowManager {
       // Development mode - load from Vite dev server
       console.log('🖼️ WindowManager: Loading development content from Vite server');
       this.mainWindow.loadURL('http://localhost:5173');
-      
-      // Open DevTools in development
       this.mainWindow.webContents.openDevTools();
     } else {
-      // Production mode - load from built files
-      console.log('🖼️ WindowManager: Loading production content from built files');
+      // Production mode - Electron Forge handles the renderer build
+      console.log('🖼️ WindowManager: Loading production content from Electron Forge build');
       
-      // In production, the files are in the app.asar or extracted app directory
-      const indexPath = this.getProductionIndexPath();
-      console.log('🖼️ WindowManager: Loading file:', indexPath);
+      // In production with Electron Forge, the renderer is served via a special URL
+      // This is handled by the VitePlugin in forge.config.ts
+      const rendererPath = this.getProductionRendererPath();
+      console.log('🖼️ WindowManager: Loading renderer from:', rendererPath);
       
-      this.mainWindow.loadFile(indexPath);
+      if (rendererPath.startsWith('http')) {
+        this.mainWindow.loadURL(rendererPath);
+      } else {
+        this.mainWindow.loadFile(rendererPath);
+      }
     }
   }
 
-  private getProductionIndexPath(): string {
-    // In production, we need to load from the renderer build output
+  private getProductionRendererPath(): string {
+    // With Electron Forge + VitePlugin, the renderer is typically served 
+    // from a special renderer URL or built into the app directory
+    
     if (app.isPackaged) {
-      // When packaged, files are in the app.asar or extracted directory
-      // The renderer files should be in the same directory as the main process
-      const rendererPath = path.join(__dirname, '..', 'renderer', 'index.html');
-      console.log('🖼️ WindowManager: Packaged app - trying renderer path:', rendererPath);
-      
-      // Check if the file exists, if not try alternative paths
+      // When packaged, check if there's a renderer directory in the app
+      const possiblePaths = [
+        // Try the main_window renderer (from forge config)
+        path.join(__dirname, '..', 'renderer', 'main_window', 'index.html'),
+        // Try direct renderer path
+        path.join(__dirname, 'renderer', 'index.html'),
+        // Try relative to main process
+        path.join(__dirname, '..', 'index.html'),
+        // Try same directory as main
+        path.join(__dirname, 'index.html')
+      ];
+
       const fs = require('fs');
-      if (fs.existsSync(rendererPath)) {
-        return rendererPath;
+      
+      for (const testPath of possiblePaths) {
+        console.log('🖼️ WindowManager: Testing path:', testPath);
+        if (fs.existsSync(testPath)) {
+          console.log('🖼️ WindowManager: Found renderer at:', testPath);
+          return testPath;
+        }
       }
       
-      // Alternative path - directly in the same directory
-      const alternatePath = path.join(__dirname, 'index.html');
-      console.log('🖼️ WindowManager: Alternative path:', alternatePath);
-      if (fs.existsSync(alternatePath)) {
-        return alternatePath;
-      }
-      
-      // Final fallback - look in dist-renderer
-      const distPath = path.join(__dirname, '..', '..', 'dist-renderer', 'index.html');
-      console.log('🖼️ WindowManager: Dist fallback path:', distPath);
-      return distPath;
+      // If no file found, try the dist-renderer as last resort
+      const fallbackPath = path.join(process.resourcesPath, 'app', 'dist-renderer', 'index.html');
+      console.log('🖼️ WindowManager: Using fallback path:', fallbackPath);
+      return fallbackPath;
     } else {
       // Development or unpackaged build
       return path.join(__dirname, '..', '..', 'dist-renderer', 'index.html');
@@ -98,29 +108,19 @@ export class WindowManager {
   }
 
   private getPreloadPath(): string {
-    if (process.env.NODE_ENV === 'development') {
+    if (app.isPackaged) {
+      // In packaged app, preload is built by Electron Forge
+      return path.join(__dirname, 'preload.js');
+    } else if (process.env.NODE_ENV === 'development') {
       // Development mode
-      const preloadPath = path.join(__dirname, '..', '..', '.vite', 'build', 'preload.js');
-      console.log('🖼️ WindowManager: Using development preload path:', preloadPath);
-      return preloadPath;
+      return path.join(__dirname, '..', '..', '.vite', 'build', 'preload.js');
     } else {
-      // Production mode
-      if (app.isPackaged) {
-        // When packaged, preload is in the same directory as main
-        const preloadPath = path.join(__dirname, 'preload.js');
-        console.log('🖼️ WindowManager: Using packaged preload path:', preloadPath);
-        return preloadPath;
-      } else {
-        // Unpackaged production build
-        const preloadPath = path.join(__dirname, '..', '..', '.vite', 'build', 'preload.js');
-        console.log('🖼️ WindowManager: Using unpackaged preload path:', preloadPath);
-        return preloadPath;
-      }
+      // Build mode but not packaged
+      return path.join(__dirname, 'preload.js');
     }
   }
 
   private getIconPath(): string | undefined {
-    // Add an icon if you have one
     if (process.platform === 'win32') {
       return path.join(__dirname, '..', '..', 'assets', 'icon.ico');
     } else if (process.platform === 'darwin') {
@@ -133,20 +133,16 @@ export class WindowManager {
   private setupWindowEvents(): void {
     if (!this.mainWindow) return;
 
-    // Handle console messages from renderer
     this.mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
       console.log(`🖼️ Renderer Console [${level}]:`, message, sourceId ? `(${sourceId}:${line})` : '');
     });
 
-    // Handle page errors
     this.mainWindow.webContents.on('render-process-gone', (event, details) => {
       console.error('🖼️ Renderer process crashed:', details);
     });
 
-    // Handle navigation
     this.mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
       console.log('🖼️ Navigation attempt to:', navigationUrl);
-      // Block navigation to external sites for security
       const url = new URL(navigationUrl);
       if (url.origin !== 'http://localhost:5173' && url.protocol !== 'file:') {
         event.preventDefault();
@@ -154,16 +150,13 @@ export class WindowManager {
       }
     });
 
-    // Handle DOM ready
     this.mainWindow.webContents.on('dom-ready', () => {
       console.log('🖼️ Main: DOM ready event fired');
     });
 
-    // Handle page finish loading
     this.mainWindow.webContents.on('did-finish-load', () => {
       console.log('🖼️ Main: Renderer finished loading');
       
-      // Inject some debug info
       this.mainWindow?.webContents.executeJavaScript(`
         console.log('🖼️ Main->Renderer: Post-load check...');
         console.log('🖼️ Main->Renderer: typeof window.electronAPI:', typeof window.electronAPI);
@@ -172,6 +165,14 @@ export class WindowManager {
           console.log('🖼️ Main->Renderer: ElectronAPI successfully loaded!');
         }
       `);
+    });
+
+    this.mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+      console.error('🖼️ Failed to load renderer:', {
+        errorCode,
+        errorDescription,
+        validatedURL
+      });
     });
   }
 

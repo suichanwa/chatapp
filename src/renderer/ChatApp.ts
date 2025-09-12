@@ -147,6 +147,8 @@ export class ChatApp {
               </div>
             </div>
             <div class="message-composer">
+              <input type="file" id="image-input" accept="image/*" style="display: none;">
+              <button id="image-btn" class="image-btn" disabled title="Send Image">📷</button>
               <input type="text" id="message-input" placeholder="Type a secure message..." disabled>
               <button id="send-btn" disabled>Send</button>
             </div>
@@ -202,6 +204,29 @@ export class ChatApp {
           </div>
         </div>
       </div>
+
+      <!-- Image Preview Modal -->
+      <div id="image-preview-modal" class="modal">
+        <div class="modal-content image-modal">
+          <div class="modal-header">
+            <h3>📷 Image Preview</h3>
+            <button class="modal-close" id="image-preview-close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="image-preview-container">
+              <img id="preview-image" alt="Image preview" />
+              <div class="image-info">
+                <p id="image-filename">filename.jpg</p>
+                <p id="image-size">Size: 0 KB</p>
+              </div>
+            </div>
+            <div class="image-actions">
+              <button id="send-image-btn" class="primary-btn">📤 Send Image</button>
+              <button id="cancel-image-btn" class="secondary-btn">❌ Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
     `;
 
     this.setupEventListeners();
@@ -223,11 +248,40 @@ export class ChatApp {
     const messageInput = document.getElementById('message-input') as HTMLInputElement;
     const newChatBtn = document.getElementById('new-chat-btn');
 
+    // Image handling
+    const imageBtn = document.getElementById('image-btn');
+    const imageInput = document.getElementById('image-input') as HTMLInputElement;
+    const sendImageBtn = document.getElementById('send-image-btn');
+    const cancelImageBtn = document.getElementById('cancel-image-btn');
+    const imagePreviewClose = document.getElementById('image-preview-close');
+    const imagePreviewModal = document.getElementById('image-preview-modal');
+
     sendBtn?.addEventListener('click', () => this.sendMessage());
     messageInput?.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') this.sendMessage();
     });
     newChatBtn?.addEventListener('click', () => this.showNewChatModal());
+
+    // Image upload handlers
+    imageBtn?.addEventListener('click', () => {
+      if (!imageInput.disabled) {
+        imageInput.click();
+      }
+    });
+
+    imageInput?.addEventListener('change', (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        this.showImagePreview(file);
+      }
+    });
+
+    sendImageBtn?.addEventListener('click', () => this.sendImage());
+    cancelImageBtn?.addEventListener('click', () => this.hideImagePreview());
+    imagePreviewClose?.addEventListener('click', () => this.hideImagePreview());
+    imagePreviewModal?.addEventListener('click', (e) => {
+      if (e.target === imagePreviewModal) this.hideImagePreview();
+    });
 
     // Modal controls
     const modalClose = document.getElementById('modal-close');
@@ -384,16 +438,28 @@ export class ChatApp {
   // Chat UI Management
   private showNewChatModal(): void {
     const modal = document.getElementById('new-chat-modal');
+    const app = document.getElementById('app');
     if (modal) {
       modal.classList.add('show');
       this.updateModalInfo();
+      if (app) {
+        app.classList.add('blurred');
+        app.classList.add('modal-animate-in');
+        setTimeout(() => app.classList.remove('modal-animate-in'), 400);
+      }
     }
   }
 
   private hideNewChatModal(): void {
     const modal = document.getElementById('new-chat-modal');
+    const app = document.getElementById('app');
     if (modal) {
       modal.classList.remove('show');
+      if (app) {
+        app.classList.remove('blurred');
+        app.classList.add('modal-animate-out');
+        setTimeout(() => app.classList.remove('modal-animate-out'), 400);
+      }
     }
   }
 

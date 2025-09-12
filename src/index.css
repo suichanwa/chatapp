@@ -505,3 +505,26 @@ body {
 .copy-btn:hover {
   background: #218838;
 }
+
+.blurred {
+  filter: blur(8px) brightness(0.8);
+  transition: filter 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-animate-in {
+  animation: modalIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-animate-out {
+  animation: modalOut 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes modalIn {
+  from { filter: blur(0px) brightness(1); }
+  to   { filter: blur(8px) brightness(0.8); }
+}
+
+@keyframes modalOut {
+  from { filter: blur(8px) brightness(0.8); }
+  to   { filter: blur(0px) brightness(1); }
+}
