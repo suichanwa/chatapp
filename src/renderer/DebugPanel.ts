@@ -1,6 +1,7 @@
 import type { DebugLog } from '../types/electron';
+import type { Component } from './types/components';
 
-export class DebugPanel {
+export class DebugPanel implements Component {
   private isOpen = false;
   private currentTab = 'system';
   private logs: DebugLog[] = [];
@@ -12,14 +13,14 @@ export class DebugPanel {
   }
 
   private setupEventListeners(): void {
-    // Listen for new logs from main process
-    if (window.electronAPI) {
-      window.electronAPI.debug?.onNewLog?.((log: DebugLog) => {
+    // Setup window API event listeners if available
+    if (window.electronAPI?.debug) {
+      window.electronAPI.debug.onNewLog?.((log: DebugLog) => {
         this.logs.unshift(log);
         this.updateLogsDisplay();
       });
 
-      window.electronAPI.debug?.onLogsCleared?.(() => {
+      window.electronAPI.debug.onLogsCleared?.(() => {
         this.logs = [];
         this.updateLogsDisplay();
       });
@@ -37,168 +38,214 @@ export class DebugPanel {
     }
   }
 
+  async initialize(): Promise<void> {
+    console.log('🔧 DebugPanel: Starting initialization...');
+    this.injectDebugStyles();
+    this.createDebugToggle();
+    this.createDebugOverlay();
+    console.log('🔧 DebugPanel: Initialization complete');
+  }
+
   createDebugOverlay(): void {
-    const overlay = document.createElement('div');
-    overlay.className = 'debug-overlay';
-    overlay.id = 'debug-overlay';
-    
-    overlay.innerHTML = `
-      <div class="debug-header">
-        <h3>🔧 Debug Panel</h3>
-        <div class="debug-controls">
-          <button class="debug-btn clear" id="debug-clear">Clear Logs</button>
+    // Create overlay HTML
+    const overlayHTML = `
+      <div id="debug-overlay" class="debug-overlay">
+        <div class="debug-header">
+          <span class="debug-title">🔧 Debug Panel</span>
           <button class="debug-btn close" id="debug-close">×</button>
         </div>
-      </div>
-      
-      <div class="debug-content">
-        <div class="debug-tabs">
-          <button class="debug-tab active" data-tab="system">System</button>
-          <button class="debug-tab" data-tab="api">API</button>
-          <button class="debug-tab" data-tab="logs">Logs</button>
-        </div>
-        
-        <div class="debug-panel active" id="debug-system">
-          <div class="system-info-grid">
-            <div class="system-info-label">User Agent:</div>
-            <div class="system-info-value">${navigator.userAgent}</div>
-            <div class="system-info-label">Platform:</div>
-            <div class="system-info-value">${navigator.platform}</div>
-            <div class="system-info-label">Language:</div>
-            <div class="system-info-value">${navigator.language}</div>
-            <div class="system-info-label">Online:</div>
-            <div class="system-info-value">${navigator.onLine ? 'Yes' : 'No'}</div>
-            <div class="system-info-label">Screen:</div>
-            <div class="system-info-value">${screen.width}x${screen.height}</div>
-            <div class="system-info-label">Viewport:</div>
-            <div class="system-info-value">${window.innerWidth}x${window.innerHeight}</div>
+        <div class="debug-content">
+          <div class="debug-tabs">
+            <button class="debug-tab active" data-tab="system">System</button>
+            <button class="debug-tab" data-tab="api">APIs</button>
+            <button class="debug-tab" data-tab="logs">Logs</button>
           </div>
-        </div>
-        
-        <div class="debug-panel" id="debug-api">
-          <ul class="api-status-list">
-            <li class="api-status-item">
-              <span class="api-status-name">ElectronAPI</span>
-              <span class="api-status-indicator ${typeof window.electronAPI !== 'undefined' ? 'available' : 'unavailable'}">
-                ${typeof window.electronAPI !== 'undefined' ? '✅' : '❌'}
-              </span>
-            </li>
-            <li class="api-status-item">
-              <span class="api-status-name">Crypto API</span>
-              <span class="api-status-indicator ${typeof window.electronAPI?.crypto !== 'undefined' ? 'available' : 'unavailable'}">
-                ${typeof window.electronAPI?.crypto !== 'undefined' ? '✅' : '❌'}
-              </span>
-            </li>
-            <li class="api-status-item">
-              <span class="api-status-name">Database API</span>
-              <span class="api-status-indicator ${typeof window.electronAPI?.db !== 'undefined' ? 'available' : 'unavailable'}">
-                ${typeof window.electronAPI?.db !== 'undefined' ? '✅' : '❌'}
-              </span>
-            </li>
-            <li class="api-status-item">
-              <span class="api-status-name">Permission API</span>
-              <span class="api-status-indicator ${typeof window.electronAPI?.permission !== 'undefined' ? 'available' : 'unavailable'}">
-                ${typeof window.electronAPI?.permission !== 'undefined' ? '✅' : '❌'}
-              </span>
-            </li>
-          </ul>
-        </div>
-        
-        <div class="debug-panel" id="debug-logs">
-          <div class="debug-log-controls">
-            <select class="debug-filter" id="debug-log-filter">
-              <option value="all">All Levels</option>
-              <option value="info">Info</option>
-              <option value="warn">Warnings</option>
-              <option value="error">Errors</option>
-            </select>
-            <select class="debug-filter" id="debug-component-filter">
-              <option value="all">All Components</option>
-            </select>
+          
+          <div class="debug-panel active" id="debug-system">
+            <div class="system-info-grid">
+              <span class="system-info-label">User Agent:</span>
+              <span class="system-info-value">${navigator.userAgent}</span>
+              <span class="system-info-label">Platform:</span>
+              <span class="system-info-value">${navigator.platform}</span>
+              <span class="system-info-label">Language:</span>
+              <span class="system-info-value">${navigator.language}</span>
+              <span class="system-info-label">Cookies Enabled:</span>
+              <span class="system-info-value">${navigator.cookieEnabled}</span>
+              <span class="system-info-label">Online:</span>
+              <span class="system-info-value">${navigator.onLine}</span>
+              <span class="system-info-label">Screen Resolution:</span>
+              <span class="system-info-value">${screen.width}x${screen.height}</span>
+              <span class="system-info-label">Window Size:</span>
+              <span class="system-info-value">${window.innerWidth}x${window.innerHeight}</span>
+              <span class="system-info-label">Color Depth:</span>
+              <span class="system-info-value">${screen.colorDepth}-bit</span>
+              <span class="system-info-label">Pixel Ratio:</span>
+              <span class="system-info-value">${window.devicePixelRatio}</span>
+              <span class="system-info-label">Timezone:</span>
+              <span class="system-info-value">${Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
+            </div>
           </div>
-          <div class="debug-logs" id="debug-logs-container">
-            <!-- Logs will be populated here -->
+          
+          <div class="debug-panel" id="debug-api">
+            <ul class="api-status-list">
+              <li class="api-status-item">
+                <span class="api-status-name">ElectronAPI</span>
+                <span class="api-status-indicator ${typeof window.electronAPI !== 'undefined' ? 'available' : 'unavailable'}">
+                  ${typeof window.electronAPI !== 'undefined' ? '✅' : '❌'}
+                </span>
+              </li>
+              <li class="api-status-item">
+                <span class="api-status-name">Crypto API</span>
+                <span class="api-status-indicator ${typeof window.electronAPI?.crypto !== 'undefined' ? 'available' : 'unavailable'}">
+                  ${typeof window.electronAPI?.crypto !== 'undefined' ? '✅' : '❌'}
+                </span>
+              </li>
+              <li class="api-status-item">
+                <span class="api-status-name">Database API</span>
+                <span class="api-status-indicator ${typeof window.electronAPI?.db !== 'undefined' ? 'available' : 'unavailable'}">
+                  ${typeof window.electronAPI?.db !== 'undefined' ? '✅' : '❌'}
+                </span>
+              </li>
+              <li class="api-status-item">
+                <span class="api-status-name">Permission API</span>
+                <span class="api-status-indicator ${typeof window.electronAPI?.permission !== 'undefined' ? 'available' : 'unavailable'}">
+                  ${typeof window.electronAPI?.permission !== 'undefined' ? '✅' : '❌'}
+                </span>
+              </li>
+              <li class="api-status-item">
+                <span class="api-status-name">Transport API</span>
+                <span class="api-status-indicator ${typeof window.electronAPI?.transport !== 'undefined' ? 'available' : 'unavailable'}">
+                  ${typeof window.electronAPI?.transport !== 'undefined' ? '✅' : '❌'}
+                </span>
+              </li>
+            </ul>
+          </div>
+          
+          <div class="debug-panel" id="debug-logs">
+            <div class="debug-log-controls">
+              <select class="debug-filter" id="debug-log-filter">
+                <option value="all">All Levels</option>
+                <option value="info">Info</option>
+                <option value="warn">Warnings</option>
+                <option value="error">Errors</option>
+              </select>
+              <select class="debug-filter" id="debug-component-filter">
+                <option value="all">All Components</option>
+              </select>
+              <button class="debug-btn" id="debug-clear-logs">Clear Logs</button>
+              <button class="debug-btn" id="debug-refresh-logs">Refresh</button>
+            </div>
+            <div class="debug-logs-container" id="debug-logs-container">
+              <!-- Logs will be populated here -->
+            </div>
           </div>
         </div>
       </div>
     `;
 
-    document.body.appendChild(overlay);
+    // Append to body if not already there
+    if (!document.getElementById('debug-overlay')) {
+      document.body.insertAdjacentHTML('beforeend', overlayHTML);
+    }
+
     this.attachEventListeners();
-    this.updateComponentFilter();
-    this.updateLogsDisplay();
   }
 
   createDebugToggle(): void {
-    const toggle = document.createElement('button');
-    toggle.className = 'debug-toggle';
-    toggle.id = 'debug-toggle';
-    toggle.innerHTML = '🔧';
-    toggle.title = 'Toggle Debug Panel';
-    
-    toggle.addEventListener('click', () => this.toggle());
-    document.body.appendChild(toggle);
+    const toggleHTML = `
+      <button id="debug-toggle" class="debug-toggle" title="Toggle Debug Panel">🔧</button>
+    `;
+
+    if (!document.getElementById('debug-toggle')) {
+      document.body.insertAdjacentHTML('beforeend', toggleHTML);
+    }
+
+    const toggle = document.getElementById('debug-toggle');
+    toggle?.addEventListener('click', () => this.toggle());
   }
 
   private attachEventListeners(): void {
+    // Close button
+    const closeBtn = document.getElementById('debug-close');
+    closeBtn?.addEventListener('click', () => this.close());
+
     // Tab switching
     document.querySelectorAll('.debug-tab').forEach(tab => {
       tab.addEventListener('click', (e) => {
         const target = e.target as HTMLElement;
         const tabName = target.dataset.tab;
-        if (tabName) {
-          this.switchTab(tabName);
-        }
+        if (tabName) this.switchTab(tabName);
       });
     });
 
-    // Close button
-    document.getElementById('debug-close')?.addEventListener('click', () => this.close());
-
-    // Clear logs button
-    document.getElementById('debug-clear')?.addEventListener('click', () => this.clearLogs());
-
-    // Log filters
-    document.getElementById('debug-log-filter')?.addEventListener('change', (e) => {
-      const target = e.target as HTMLSelectElement;
-      this.logFilter = target.value;
+    // Filter controls
+    const logFilter = document.getElementById('debug-log-filter') as HTMLSelectElement;
+    logFilter?.addEventListener('change', (e) => {
+      this.logFilter = (e.target as HTMLSelectElement).value;
       this.updateLogsDisplay();
     });
 
-    document.getElementById('debug-component-filter')?.addEventListener('change', (e) => {
-      const target = e.target as HTMLSelectElement;
-      this.logFilter = target.value;
+    const componentFilter = document.getElementById('debug-component-filter') as HTMLSelectElement;
+    componentFilter?.addEventListener('change', () => {
+      this.updateComponentFilter();
       this.updateLogsDisplay();
+    });
+
+    // Clear logs button
+    const clearLogsBtn = document.getElementById('debug-clear-logs');
+    clearLogsBtn?.addEventListener('click', () => this.clearLogs());
+
+    // Refresh logs button
+    const refreshLogsBtn = document.getElementById('debug-refresh-logs');
+    refreshLogsBtn?.addEventListener('click', () => this.loadLogs());
+
+    // Click outside to close
+    const overlay = document.getElementById('debug-overlay');
+    overlay?.addEventListener('click', (e) => {
+      if (e.target === overlay) this.close();
+    });
+
+    // Escape key to close
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.isOpen) {
+        this.close();
+      }
     });
   }
 
   private switchTab(tabName: string): void {
     this.currentTab = tabName;
-    
+
     // Update tab buttons
     document.querySelectorAll('.debug-tab').forEach(tab => {
       tab.classList.remove('active');
     });
-    document.querySelector(`[data-tab="${tabName}"]`)?.classList.add('active');
-    
+    const activeTab = document.querySelector(`[data-tab="${tabName}"]`);
+    activeTab?.classList.add('active');
+
     // Update panels
     document.querySelectorAll('.debug-panel').forEach(panel => {
       panel.classList.remove('active');
     });
-    document.getElementById(`debug-${tabName}`)?.classList.add('active');
+    const activePanel = document.getElementById(`debug-${tabName}`);
+    activePanel?.classList.add('active');
   }
 
   private updateComponentFilter(): void {
     const componentFilter = document.getElementById('debug-component-filter') as HTMLSelectElement;
     if (!componentFilter) return;
 
-    const components = new Set(this.logs.map(log => log.component));
-    
+    const components = [...new Set(this.logs.map(log => log.component))];
+    const currentValue = componentFilter.value;
+
     componentFilter.innerHTML = '<option value="all">All Components</option>';
     components.forEach(component => {
       const option = document.createElement('option');
       option.value = component;
       option.textContent = component;
+      if (component === currentValue) {
+        option.selected = true;
+      }
       componentFilter.appendChild(option);
     });
   }
@@ -207,24 +254,39 @@ export class DebugPanel {
     const container = document.getElementById('debug-logs-container');
     if (!container) return;
 
+    const componentFilter = document.getElementById('debug-component-filter') as HTMLSelectElement;
+    const selectedComponent = componentFilter?.value || 'all';
+
     let filteredLogs = this.logs;
-    
+
     // Filter by level
     if (this.logFilter !== 'all') {
       filteredLogs = filteredLogs.filter(log => log.level === this.logFilter);
     }
 
+    // Filter by component
+    if (selectedComponent !== 'all') {
+      filteredLogs = filteredLogs.filter(log => log.component === selectedComponent);
+    }
+
+    if (filteredLogs.length === 0) {
+      container.innerHTML = '<div class="debug-no-logs">No logs to display</div>';
+      return;
+    }
+
     container.innerHTML = filteredLogs.map(log => `
       <div class="debug-log-entry ${log.level}">
         <div class="debug-log-header">
-          <span class="debug-log-component">${log.component}</span>
           <span class="debug-log-time">${new Date(log.timestamp).toLocaleTimeString()}</span>
+          <span class="debug-log-level ${log.level}">${log.level.toUpperCase()}</span>
+          <span class="debug-log-component">${log.component}</span>
         </div>
         <div class="debug-log-message">${log.message}</div>
         ${log.data ? `<div class="debug-log-data">${JSON.stringify(log.data, null, 2)}</div>` : ''}
       </div>
     `).join('');
 
+    // Update component filter options
     this.updateComponentFilter();
   }
 
@@ -253,12 +315,8 @@ export class DebugPanel {
     const overlay = document.getElementById('debug-overlay');
     const toggle = document.getElementById('debug-toggle');
     
-    if (overlay) {
-      overlay.classList.add('open');
-    }
-    if (toggle) {
-      toggle.classList.add('active');
-    }
+    overlay?.classList.add('open');
+    toggle?.classList.add('active');
   }
 
   close(): void {
@@ -266,31 +324,63 @@ export class DebugPanel {
     const overlay = document.getElementById('debug-overlay');
     const toggle = document.getElementById('debug-toggle');
     
-    if (overlay) {
-      overlay.classList.remove('open');
-    }
-    if (toggle) {
-      toggle.classList.remove('active');
-    }
+    overlay?.classList.remove('open');
+    toggle?.classList.remove('active');
   }
 
-  initialize(): void {
-    console.log('🔧 DebugPanel: Starting initialization...');
+  cleanup(): void {
+    // Remove debug elements
+    const overlay = document.getElementById('debug-overlay');
+    const toggle = document.getElementById('debug-toggle');
     
-    // Inject debug styles directly instead of trying to load external CSS
-    this.injectDebugStyles();
-
-    // Create debug elements
-    this.createDebugToggle();
-    this.createDebugOverlay();
-    
-    console.log('🔧 DebugPanel: Initialization complete');
+    overlay?.remove();
+    toggle?.remove();
   }
 
   private injectDebugStyles(): void {
-    const style = document.createElement('style');
-    style.textContent = `
-      /* Debug Menu Styles */
+    if (document.getElementById('debug-styles')) return;
+
+    const styles = document.createElement('style');
+    styles.id = 'debug-styles';
+    styles.textContent = `
+      /* Debug Toggle Button - MOVED TO MIDDLE RIGHT */
+      .debug-toggle {
+        position: fixed;
+        top: 50%;
+        right: 20px;
+        transform: translateY(-50%);
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: rgba(0, 122, 204, 0.8);
+        border: none;
+        color: white;
+        font-size: 1.2rem;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        transition: all 0.3s ease;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .debug-toggle:hover {
+        background: rgba(0, 122, 204, 1);
+        transform: translateY(-50%) scale(1.1);
+        box-shadow: 0 6px 16px rgba(0, 122, 204, 0.4);
+      }
+
+      .debug-toggle.active {
+        background: rgba(220, 53, 69, 0.8);
+      }
+
+      .debug-toggle.active:hover {
+        background: rgba(220, 53, 69, 1);
+        box-shadow: 0 6px 16px rgba(220, 53, 69, 0.4);
+      }
+
+      /* Debug Overlay */
       .debug-overlay {
         position: fixed;
         top: 0;
@@ -311,6 +401,7 @@ export class DebugPanel {
         transform: translateX(0);
       }
 
+      /* Rest of your debug styles... */
       .debug-header {
         background: #2d2d2d;
         padding: 1rem;
@@ -548,43 +639,6 @@ export class DebugPanel {
         font-size: 0.7rem;
       }
 
-      /* Toggle Button - POSITIONED NEXT TO STATUS */
-      .debug-toggle {
-        position: absolute;
-        top: 50%;
-        right: -45px;
-        transform: translateY(-50%);
-        background: rgba(0, 122, 204, 0.8);
-        border: none;
-        color: white;
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        cursor: pointer;
-        font-size: 1rem;
-        z-index: 9999;
-        transition: all 0.2s;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-      }
-
-      .debug-toggle:hover {
-        background: rgba(0, 122, 204, 1);
-        transform: translateY(-50%) scale(1.1);
-        box-shadow: 0 4px 12px rgba(0, 122, 204, 0.4);
-      }
-
-      .debug-toggle.active {
-        background: rgba(220, 53, 69, 0.8);
-      }
-
-      .debug-toggle.active:hover {
-        background: rgba(220, 53, 69, 1);
-        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
-      }
-
       /* Responsive adjustments */
       @media (max-width: 1200px) {
         .debug-overlay {
@@ -592,13 +646,23 @@ export class DebugPanel {
         }
         
         .debug-toggle {
-          right: 1rem;
-          width: 28px;
-          height: 28px;
+          right: 15px;
+          width: 36px;
+          height: 36px;
+          font-size: 1rem;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .debug-toggle {
+          right: 10px;
+          width: 32px;
+          height: 32px;
           font-size: 0.9rem;
         }
       }
     `;
-    document.head.appendChild(style);
+
+    document.head.appendChild(styles);
   }
 }

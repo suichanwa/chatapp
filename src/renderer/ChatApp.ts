@@ -1,88 +1,433 @@
 import { DebugPanel } from './DebugPanel';
-import type { IdentityKeys, Message, Chat, PeerInfo } from '../types/electron';
+import { Modal } from './components/Modal';
+import { TabSystem } from './components/TabSystem';
+import { ConnectionTab } from './components/ConnectionTab';
+import { ConnectionInfoTab } from './components/ConnectionInfoTab';
+import type { Component } from './types/components';
+import type { Message, Chat, PeerInfo } from '../types/index';
 
-interface InitStatus {
-  step: string;
-  status: 'pending' | 'success' | 'error';
-  message?: string;
-  timestamp: number;
+// Simple EventBus implementation
+class EventBus {
+  private static instance: EventBus;
+  private listeners: Map<string, Function[]> = new Map();
+
+  static getInstance(): EventBus {
+    if (!this.instance) {
+      this.instance = new EventBus();
+    }
+    return this.instance;
+  }
+
+  on(event: string, callback: Function): void {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, []);
+    }
+    this.listeners.get(event)!.push(callback);
+  }
+
+  emit(event: string, ...args: any[]): void {
+    const eventListeners = this.listeners.get(event);
+    if (eventListeners) {
+      eventListeners.forEach(callback => callback(...args));
+    }
+  }
 }
 
-export class ChatApp {
-  private identityKeys: IdentityKeys | null = null;
-  private initSteps: InitStatus[] = [];
-  private debugPanel: DebugPanel;
-  private currentChatId: string | null = null;
-  private chats: Map<string, Chat> = new Map();
-  private serverInfo: { port: number; address: string } | null = null;
+export class ChatApp implements Component {
+  protected eventBus = EventBus.getInstance();
+  protected components: Map<string, Component> = new Map();
+  
+  // UI State
+  protected currentChatId: string | null = null;
+  protected chats: Map<string, Chat> = new Map();
+  
+  // Modal components
+  private newChatModal: Modal | null = null;
+  private tabSystem: TabSystem | null = null;
+  private connectionTab: ConnectionTab | null = null;
+  private connectionInfoTab: ConnectionInfoTab | null = null;
 
   constructor() {
-    this.debugPanel = new DebugPanel();
+    this.initializeComponents();
+  }
+
+  private initializeComponents(): void {
+    // Only initialize components that exist
+    try {
+      this.components.set('debug', new DebugPanel());
+      console.log('✅ DebugPanel component initialized');
+    } catch (error) {
+      console.warn('⚠️ DebugPanel not available:', error);
+    }
+    
+    console.log('🔧 Initializing modal components...');
+  }
+
+  private async initializeNewChatModal(): Promise<void> {
+    try {
+      console.log('🔧 Creating basic modal without complex components...');
+      
+      // Create a simple modal without TabSystem dependencies first
+      this.newChatModal = new Modal(
+        'new-chat-modal',
+        '🆕 Create New Chat',
+        `
+          <div style="padding: 2rem;">
+            <div class="simple-tabs" style="display: flex; margin-bottom: 2rem; border-bottom: 1px solid #404040;">
+              <button class="simple-tab active" data-tab="connect" style="flex: 1; padding: 1rem; background: #2d2d2d; color: white; border: none; cursor: pointer;">
+                🌐 Connect to Peer
+              </button>
+              <button class="simple-tab" data-tab="info" style="flex: 1; padding: 1rem; background: #1a1a1a; color: #888; border: none; cursor: pointer;">
+                📡 My Connection Info
+              </button>
+            </div>
+            
+            <div class="simple-tab-content active" id="connect-content">
+              <h4>Connect to Peer</h4>
+              <div style="margin: 1rem 0;">
+                <label style="display: block; margin-bottom: 0.5rem;">Peer Address (IP:Port)</label>
+                <input type="text" id="simple-peer-address" placeholder="127.0.0.1:8080" style="width: 100%; padding: 0.75rem; background: #1a1a1a; border: 1px solid #404040; color: white; border-radius: 4px;">
+              </div>
+              <div style="margin: 1rem 0;">
+                <label style="display: block; margin-bottom: 0.5rem;">Chat Name</label>
+                <input type="text" id="simple-chat-name" placeholder="Chat with friend" style="width: 100%; padding: 0.75rem; background: #1a1a1a; border: 1px solid #404040; color: white; border-radius: 4px;">
+              </div>
+              <button id="simple-connect-btn" style="padding: 0.75rem 1.5rem; background: #007acc; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 1rem;">
+                Connect
+              </button>
+            </div>
+            
+            <div class="simple-tab-content" id="info-content" style="display: none;">
+              <h4>📡 Your Connection Info</h4>
+              <div style="margin: 1rem 0;">
+                <label style="display: block; margin-bottom: 0.5rem;">Server Status:</label>
+                <span id="modal-server-status" style="color: #888;">Not started</span>
+              </div>
+              <div style="margin: 1rem 0;">
+                <label style="display: block; margin-bottom: 0.5rem;">Your Address:</label>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <span id="modal-my-address" style="color: #888;">Unknown</span>
+                  <button id="copy-address" style="padding: 0.25rem 0.5rem; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">📋</button>
+                </div>
+              </div>
+              <div style="margin: 1rem 0;">
+                <label style="display: block; margin-bottom: 0.5rem;">Your Public Key:</label>
+                <div style="display: flex; align-items: flex-start; gap: 0.5rem;">
+                  <textarea id="my-public-key" readonly style="flex: 1; min-height: 100px; padding: 0.5rem; background: #1a1a1a; border: 1px solid #404040; color: white; border-radius: 4px; font-family: monospace; font-size: 0.8rem;"></textarea>
+                  <button id="copy-key" style="padding: 0.25rem 0.5rem; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">📋</button>
+                </div>
+              </div>
+              <button id="start-server-btn" style="padding: 0.75rem 1.5rem; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 1rem;">
+                Start Server
+              </button>
+            </div>
+          </div>
+        `,
+        'new-chat-modal'
+      );
+
+      await this.newChatModal.initialize();
+      
+      // Add simple tab switching
+      this.setupSimpleTabSwitching();
+      
+      // Add simple event listeners
+      this.setupSimpleModalEventListeners();
+
+      console.log('✅ Simple modal created successfully');
+
+    } catch (error) {
+      console.error('❌ Failed to create modal:', error);
+      throw error;
+    }
+  }
+
+  private setupSimpleTabSwitching(): void {
+    const modal = this.newChatModal?.modal;
+    if (!modal) return;
+
+    const tabButtons = modal.querySelectorAll('.simple-tab');
+    const tabContents = modal.querySelectorAll('.simple-tab-content');
+
+    tabButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const targetTab = (button as HTMLElement).dataset.tab;
+        
+        // Remove active class from all tabs and contents
+        tabButtons.forEach(btn => {
+          btn.classList.remove('active');
+          (btn as HTMLElement).style.background = '#1a1a1a';
+          (btn as HTMLElement).style.color = '#888';
+        });
+        
+        tabContents.forEach(content => {
+          content.classList.remove('active');
+          (content as HTMLElement).style.display = 'none';
+        });
+        
+        // Add active class to clicked tab
+        button.classList.add('active');
+        (button as HTMLElement).style.background = '#2d2d2d';
+        (button as HTMLElement).style.color = 'white';
+        
+        // Show corresponding content
+        const targetContent = modal.querySelector(`#${targetTab}-content`);
+        if (targetContent) {
+          targetContent.classList.add('active');
+          (targetContent as HTMLElement).style.display = 'block';
+        }
+      });
+    });
+  }
+
+  private setupSimpleModalEventListeners(): void {
+    const modal = this.newChatModal?.modal;
+    if (!modal) return;
+
+    // Connect button
+    const connectBtn = modal.querySelector('#simple-connect-btn');
+    connectBtn?.addEventListener('click', async () => {
+      const addressInput = modal.querySelector('#simple-peer-address') as HTMLInputElement;
+      const nameInput = modal.querySelector('#simple-chat-name') as HTMLInputElement;
+      
+      const address = addressInput?.value.trim();
+      const name = nameInput?.value.trim() || 'Unknown';
+
+      if (!address) {
+        alert('Please enter a peer address');
+        return;
+      }
+
+      try {
+        await this.handlePeerConnection(address, name);
+        this.newChatModal?.close();
+        // Clear inputs
+        if (addressInput) addressInput.value = '';
+        if (nameInput) nameInput.value = '';
+      } catch (error) {
+        console.error('Connection failed:', error);
+        alert(`Connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    });
+
+    // Start server button
+    const startServerBtn = modal.querySelector('#start-server-btn');
+    startServerBtn?.addEventListener('click', async () => {
+      try {
+        await this.handleStartServer();
+      } catch (error) {
+        console.error('Failed to start server:', error);
+        alert(`Failed to start server: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    });
+
+    // Copy buttons
+    const copyAddressBtn = modal.querySelector('#copy-address');
+    const copyKeyBtn = modal.querySelector('#copy-key');
+
+    copyAddressBtn?.addEventListener('click', async () => {
+      const addressSpan = modal.querySelector('#modal-my-address');
+      const address = addressSpan?.textContent;
+      if (address && address !== 'Unknown') {
+        try {
+          await navigator.clipboard.writeText(address);
+          const btn = copyAddressBtn as HTMLElement;
+          const originalText = btn.textContent;
+          btn.textContent = '✅';
+          setTimeout(() => {
+            btn.textContent = originalText;
+          }, 2000);
+        } catch (error) {
+          console.error('Failed to copy address:', error);
+        }
+      }
+    });
+
+    copyKeyBtn?.addEventListener('click', async () => {
+      const keyTextarea = modal.querySelector('#my-public-key') as HTMLTextAreaElement;
+      const key = keyTextarea?.value;
+      if (key) {
+        try {
+          await navigator.clipboard.writeText(key);
+          const btn = copyKeyBtn as HTMLElement;
+          const originalText = btn.textContent;
+          btn.textContent = '✅';
+          setTimeout(() => {
+            btn.textContent = originalText;
+          }, 2000);
+        } catch (error) {
+          console.error('Failed to copy key:', error);
+        }
+      }
+    });
+  }
+
+  private async handlePeerConnection(address: string, name: string): Promise<void> {
+    const [ip, portStr] = address.split(':');
+    const port = parseInt(portStr);
+    
+    if (!ip || !port) {
+      throw new Error('Invalid address format. Use IP:PORT');
+    }
+    
+    if (!window.electronAPI?.transport) {
+      throw new Error('Transport API not available');
+    }
+
+    console.log(`Connecting to ${ip}:${port}...`);
+    const success = await window.electronAPI.transport.connect(ip, port);
+    
+    if (success) {
+      console.log('Successfully connected to peer');
+      return;
+    } else {
+      throw new Error('Failed to connect to peer');
+    }
+  }
+
+  private async handleStartServer(): Promise<void> {
+    if (!window.electronAPI?.transport) {
+      throw new Error('Transport API not available');
+    }
+
+    console.log('Starting server...');
+    const result = await window.electronAPI.transport.startServer();
+    
+    console.log(`Server started on ${result.address}:${result.port}`);
+    
+    // Update modal info
+    this.updateModalServerInfo(result.address, result.port);
+    
+    // Update sidebar status
+    this.updateServerStatus();
+  }
+
+  private updateModalServerInfo(address: string, port: number): void {
+    const modal = this.newChatModal?.modal;
+    if (!modal) return;
+
+    const serverStatus = modal.querySelector('#modal-server-status');
+    const myAddress = modal.querySelector('#modal-my-address');
+
+    if (serverStatus) {
+      (serverStatus as HTMLElement).textContent = 'Running';
+      (serverStatus as HTMLElement).style.color = '#28a745';
+    }
+
+    if (myAddress) {
+      (myAddress as HTMLElement).textContent = `${address}:${port}`;
+      (myAddress as HTMLElement).style.color = '#fff';
+    }
+  }
+
+  private async updateConnectionInfo(): Promise<void> {
+    const modal = this.newChatModal?.modal;
+    if (!modal) return;
+
+    // Update public key
+    if (window.electronAPI?.crypto) {
+      try {
+        const publicKey = await window.electronAPI.crypto.getPublicKey();
+        const keyTextarea = modal.querySelector('#my-public-key') as HTMLTextAreaElement;
+        if (keyTextarea && publicKey) {
+          keyTextarea.value = publicKey;
+        }
+      } catch (error) {
+        console.error('Failed to get public key:', error);
+      }
+    }
   }
 
   async initialize(): Promise<void> {
     console.log('🔧 ChatApp: Starting initialization...');
     
-    // Wait a bit for preload to fully load
+    // Wait for preload
     await new Promise(resolve => setTimeout(resolve, 100));
     
-    // Initialize debug panel first
-    console.log('🔧 ChatApp: Initializing debug panel...');
-    this.debugPanel.initialize();
-    console.log('🔧 ChatApp: Debug panel initialized');
-    
-    this.addInitStep('UI Setup', 'pending');
+    // Setup UI first
     await this.setupUI();
-    this.addInitStep('UI Setup', 'success');
-
-    this.addInitStep('ElectronAPI Check', 'pending');
+    
+    // Check ElectronAPI
     await this.checkElectronAPI();
 
-    this.addInitStep('Crypto Initialization', 'pending');
-    await this.initializeCrypto();
+    // Initialize available components only
+    for (const [name, component] of this.components) {
+      try {
+        console.log(`🔧 Initializing ${name}...`);
+        if (component.initialize) {
+          await component.initialize();
+        }
+        console.log(`✅ ${name} initialized`);
+      } catch (error) {
+        console.error(`❌ Failed to initialize ${name}:`, error);
+      }
+    }
 
-    this.addInitStep('Network Setup', 'pending');
-    await this.setupNetworking();
+    // Try to initialize modal components
+    try {
+      console.log('🔧 Initializing modal components...');
+      await this.initializeNewChatModal();
+      console.log('✅ Modal components initialized successfully');
+    } catch (error) {
+      console.error('❌ Failed to initialize modal components:', error);
+      console.log('🔧 Creating simple fallback modal...');
+      this.createSimpleFallbackModal();
+    }
 
-    this.addInitStep('Chat Loading', 'pending');
+    // Setup event listeners after components are initialized
+    this.setupEventListeners();
+
+    // Load existing chats
     await this.loadExistingChats();
 
     console.log('🔧 ChatApp: Initialization complete');
   }
 
-  private addInitStep(step: string, status: 'pending' | 'success' | 'error', message?: string): void {
-    const newStep: InitStatus = {
-      step,
-      status,
-      message,
-      timestamp: Date.now()
-    };
+  protected setupEventListeners(): void {
+    // Chat events
+    this.eventBus.on('chat:selected', (chatId: string) => {
+      this.selectChat(chatId);
+    });
 
-    const existingIndex = this.initSteps.findIndex(s => s.step === step);
-    if (existingIndex !== -1) {
-      this.initSteps[existingIndex] = newStep;
-    } else {
-      this.initSteps.push(newStep);
-    }
+    this.eventBus.on('chat:updated', (chatId: string) => {
+      console.log('Chat updated:', chatId);
+      this.refreshChatList();
+    });
 
-    // Log to debug system
-    if (window.electronAPI?.debug) {
-      const logLevel = status === 'error' ? 'error' : 'info';
-      window.electronAPI.debug.addLog({
-        level: logLevel,
-        component: 'ChatApp',
-        message: `${step}: ${status}`,
-        data: message ? { message } : undefined
+    this.eventBus.on('message:sent', (message: Message) => {
+      if (this.currentChatId === message.chatId) {
+        this.refreshMessages();
+      }
+      this.refreshChatList();
+    });
+
+    this.eventBus.on('message:received', (message: Message) => {
+      if (this.currentChatId === message.chatId) {
+        this.refreshMessages();
+      }
+      this.refreshChatList();
+    });
+
+    // Transport events - setup listeners if transport is available
+    if (window.electronAPI?.transport) {
+      window.electronAPI.transport.onPeerConnected((chatId: string, peerInfo: PeerInfo) => {
+        this.handlePeerConnected(chatId, peerInfo);
+      });
+
+      window.electronAPI.transport.onPeerDisconnected((chatId: string) => {
+        this.handlePeerDisconnected(chatId);
+      });
+
+      window.electronAPI.transport.onMessage((chatId: string, data: any) => {
+        this.handleIncomingMessage(chatId, data);
       });
     }
-
-    this.updateInitStatus();
   }
 
-  private async checkElectronAPI(): Promise<void> {
+  protected async checkElectronAPI(): Promise<void> {
     try {
       console.log('🔧 Checking ElectronAPI availability...');
-      
+
       if (typeof window.electronAPI === 'undefined') {
         throw new Error('window.electronAPI is undefined - preload script not loaded');
       }
@@ -102,16 +447,15 @@ export class ChatApp {
         throw new Error(`Missing APIs: ${missingApis.join(', ')}`);
       }
 
-      this.addInitStep('ElectronAPI Check', 'success', 'All APIs available');
+      console.log('✅ All APIs are available');
       
     } catch (error) {
       console.error('🔧 ElectronAPI check failed:', error);
-      this.addInitStep('ElectronAPI Check', 'error', 
-        error instanceof Error ? error.message : 'Unknown error');
+      // Don't throw - continue with limited functionality
     }
   }
 
-  private async setupUI(): Promise<void> {
+  protected async setupUI(): Promise<void> {
     document.body.innerHTML = `
       <div id="app">
         <header class="app-header">
@@ -147,433 +491,147 @@ export class ChatApp {
               </div>
             </div>
             <div class="message-composer">
-              <input type="file" id="image-input" accept="image/*" style="display: none;">
-              <button id="image-btn" class="image-btn" disabled title="Send Image">📷</button>
               <input type="text" id="message-input" placeholder="Type a secure message..." disabled>
               <button id="send-btn" disabled>Send</button>
             </div>
           </section>
         </main>
       </div>
-
-      <!-- New Chat Modal -->
-      <div id="new-chat-modal" class="modal">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h3>🆕 Create New Chat</h3>
-            <button class="modal-close" id="modal-close">&times;</button>
-          </div>
-          <div class="modal-body">
-            <div class="connection-tabs">
-              <button class="tab-btn active" data-tab="connect">Connect to Peer</button>
-              <button class="tab-btn" data-tab="info">My Connection Info</button>
-            </div>
-            
-            <div class="tab-content active" id="connect-tab">
-              <div class="form-group">
-                <label>Peer Address (IP:Port)</label>
-                <input type="text" id="peer-address" placeholder="127.0.0.1:8080" />
-              </div>
-              <div class="form-group">
-                <label>Chat Name</label>
-                <input type="text" id="chat-name" placeholder="Chat with friend" />
-              </div>
-              <button id="connect-btn" class="primary-btn">Connect</button>
-            </div>
-            
-            <div class="tab-content" id="info-tab">
-              <div class="info-section">
-                <h4>📡 Your Connection Info</h4>
-                <div class="info-item">
-                  <label>Server Status:</label>
-                  <span id="modal-server-status">Not started</span>
-                </div>
-                <div class="info-item">
-                  <label>Your Address:</label>
-                  <span id="modal-my-address">Unknown</span>
-                  <button id="copy-address" class="copy-btn">📋</button>
-                </div>
-                <div class="info-item">
-                  <label>Your Public Key:</label>
-                  <textarea id="my-public-key" readonly></textarea>
-                  <button id="copy-key" class="copy-btn">📋</button>
-                </div>
-              </div>
-              <button id="start-server-btn" class="primary-btn">Start Server</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Image Preview Modal -->
-      <div id="image-preview-modal" class="modal">
-        <div class="modal-content image-modal">
-          <div class="modal-header">
-            <h3>📷 Image Preview</h3>
-            <button class="modal-close" id="image-preview-close">&times;</button>
-          </div>
-          <div class="modal-body">
-            <div class="image-preview-container">
-              <img id="preview-image" alt="Image preview" />
-              <div class="image-info">
-                <p id="image-filename">filename.jpg</p>
-                <p id="image-size">Size: 0 KB</p>
-              </div>
-            </div>
-            <div class="image-actions">
-              <button id="send-image-btn" class="primary-btn">📤 Send Image</button>
-              <button id="cancel-image-btn" class="secondary-btn">❌ Cancel</button>
-            </div>
-          </div>
-        </div>
-      </div>
     `;
 
-    this.setupEventListeners();
-    
-    const debugToggle = document.getElementById('debug-toggle');
-    console.log('🔧 Debug toggle found:', debugToggle ? 'YES' : 'NO');
-    
-    if (!debugToggle) {
-      console.error('🔧 Debug toggle not found! Re-initializing debug panel...');
-      setTimeout(() => {
-        this.debugPanel.initialize();
-      }, 1000);
-    }
+    this.setupBasicEventListeners();
   }
 
-  private setupEventListeners(): void {
+  protected setupBasicEventListeners(): void {
     // Message sending
     const sendBtn = document.getElementById('send-btn');
     const messageInput = document.getElementById('message-input') as HTMLInputElement;
     const newChatBtn = document.getElementById('new-chat-btn');
 
-    // Image handling
-    const imageBtn = document.getElementById('image-btn');
-    const imageInput = document.getElementById('image-input') as HTMLInputElement;
-    const sendImageBtn = document.getElementById('send-image-btn');
-    const cancelImageBtn = document.getElementById('cancel-image-btn');
-    const imagePreviewClose = document.getElementById('image-preview-close');
-    const imagePreviewModal = document.getElementById('image-preview-modal');
-
     sendBtn?.addEventListener('click', () => this.sendMessage());
     messageInput?.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') this.sendMessage();
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        this.sendMessage();
+      }
     });
     newChatBtn?.addEventListener('click', () => this.showNewChatModal());
-
-    // Image upload handlers
-    imageBtn?.addEventListener('click', () => {
-      if (!imageInput.disabled) {
-        imageInput.click();
-      }
-    });
-
-    imageInput?.addEventListener('change', (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        this.showImagePreview(file);
-      }
-    });
-
-    sendImageBtn?.addEventListener('click', () => this.sendImage());
-    cancelImageBtn?.addEventListener('click', () => this.hideImagePreview());
-    imagePreviewClose?.addEventListener('click', () => this.hideImagePreview());
-    imagePreviewModal?.addEventListener('click', (e) => {
-      if (e.target === imagePreviewModal) this.hideImagePreview();
-    });
-
-    // Modal controls
-    const modalClose = document.getElementById('modal-close');
-    const modal = document.getElementById('new-chat-modal');
-    
-    modalClose?.addEventListener('click', () => this.hideNewChatModal());
-    modal?.addEventListener('click', (e) => {
-      if (e.target === modal) this.hideNewChatModal();
-    });
-
-    // Tab switching
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const target = e.target as HTMLElement;
-        const tabName = target.dataset.tab;
-        if (tabName) this.switchTab(tabName);
-      });
-    });
-
-    // Connection actions
-    const connectBtn = document.getElementById('connect-btn');
-    const startServerBtn = document.getElementById('start-server-btn');
-    const copyAddressBtn = document.getElementById('copy-address');
-    const copyKeyBtn = document.getElementById('copy-key');
-
-    connectBtn?.addEventListener('click', () => this.connectToPeer());
-    startServerBtn?.addEventListener('click', () => this.startServer());
-    copyAddressBtn?.addEventListener('click', () => this.copyToClipboard('address'));
-    copyKeyBtn?.addEventListener('click', () => this.copyToClipboard('key'));
-
-    // Transport event listeners
-    if (window.electronAPI?.transport) {
-      window.electronAPI.transport.onPeerConnected((chatId, peerInfo) => {
-        console.log('🔗 Peer connected:', chatId, peerInfo);
-        this.handlePeerConnected(chatId, peerInfo);
-      });
-
-      window.electronAPI.transport.onPeerDisconnected((chatId) => {
-        console.log('🔗 Peer disconnected:', chatId);
-        this.handlePeerDisconnected(chatId);
-      });
-
-      window.electronAPI.transport.onMessage((chatId, data) => {
-        console.log('📨 Message received:', chatId, data);
-        this.handleIncomingMessage(chatId, data);
-      });
-    }
   }
 
-  private async setupNetworking(): Promise<void> {
-    try {
-      // Start the server automatically on a random port
-      this.serverInfo = await window.electronAPI.transport.startServer();
-      this.addInitStep('Network Setup', 'success', 
-        `Server listening on ${this.serverInfo.address}:${this.serverInfo.port}`);
-      this.updateServerStatus();
-    } catch (error) {
-      this.addInitStep('Network Setup', 'error', 
-        error instanceof Error ? error.message : 'Failed to start server');
-    }
-  }
-
-  private async loadExistingChats(): Promise<void> {
-    try {
-      const chats = await window.electronAPI.db.getChats();
-      this.chats.clear();
-      
-      for (const chat of chats) {
-        this.chats.set(chat.id, chat);
-      }
-      
-      this.renderChatList();
-      this.addInitStep('Chat Loading', 'success', `Loaded ${chats.length} chats`);
-    } catch (error) {
-      this.addInitStep('Chat Loading', 'error', 
-        error instanceof Error ? error.message : 'Failed to load chats');
-    }
-  }
-
-  private updateInitStatus(): void {
-    const statusEl = document.getElementById('app-status');
-    if (!statusEl) return;
-
-    const pendingSteps = this.initSteps.filter(s => s.status === 'pending');
-    const errorSteps = this.initSteps.filter(s => s.status === 'error');
-    const successSteps = this.initSteps.filter(s => s.status === 'success');
-
-    const hasElectronAPI = typeof window.electronAPI !== 'undefined';
-    const hasCryptoAPI = typeof window.electronAPI?.crypto !== 'undefined';
-    const hasDbAPI = typeof window.electronAPI?.db !== 'undefined';
-    const hasIdentityKeys = this.identityKeys !== null;
-    const hasNetworking = this.serverInfo !== null;
-
-    if (errorSteps.length > 0) {
-      statusEl.textContent = '🔴 App is not safe';
-      statusEl.className = 'app-status error';
-    } else if (pendingSteps.length > 0) {
-      statusEl.textContent = '🔄 Starting...';
-      statusEl.className = 'app-status pending';
-    } else if (
-      successSteps.length >= 4 && 
-      hasElectronAPI && 
-      hasCryptoAPI && 
-      hasDbAPI && 
-      hasIdentityKeys &&
-      hasNetworking
-    ) {
-      statusEl.textContent = '🟢 App is safe';
-      statusEl.className = 'app-status safe';
-    } else {
-      const issues: string[] = [];
-      if (!hasElectronAPI) issues.push('No ElectronAPI');
-      if (!hasCryptoAPI) issues.push('No Crypto');
-      if (!hasDbAPI) issues.push('No Database');
-      if (!hasIdentityKeys) issues.push('No Identity');
-      if (!hasNetworking) issues.push('No Network');
-      
-      statusEl.textContent = '🟡 App is not safe';
-      statusEl.className = 'app-status warning';
-      statusEl.title = `Issues: ${issues.join(', ')}`;
-    }
-  }
-
-  private async initializeCrypto(): Promise<void> {
-    try {
-      if (typeof window.electronAPI === 'undefined') {
-        throw new Error('ElectronAPI not available - preload script may not be loaded');
-      }
-
-      if (!window.electronAPI.crypto) {
-        throw new Error('Crypto API not available');
-      }
-
-      this.addInitStep('Crypto Initialization', 'pending', 'Generating identity keys...');
-      
-      const timeout = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('Crypto initialization timeout')), 10000)
-      );
-
-      const cryptoPromise = window.electronAPI.crypto.generateIdentity();
-      
-      this.identityKeys = await Promise.race([cryptoPromise, timeout]);
-      
-      this.addInitStep('Crypto Initialization', 'success', 
-        `Generated ${this.identityKeys.publicKey.length} char public key`);
-      
-    } catch (error) {
-      console.error('Failed to initialize crypto:', error);
-      this.addInitStep('Crypto Initialization', 'error', 
-        `${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  // Chat UI Management
   private showNewChatModal(): void {
-    const modal = document.getElementById('new-chat-modal');
-    const app = document.getElementById('app');
-    if (modal) {
-      modal.classList.add('show');
-      this.updateModalInfo();
-      if (app) {
-        app.classList.add('blurred');
-        app.classList.add('modal-animate-in');
-        setTimeout(() => app.classList.remove('modal-animate-in'), 400);
-      }
+    console.log('🔧 showNewChatModal called');
+    
+    if (this.newChatModal) {
+      console.log('🔧 Modal exists, opening...');
+      this.newChatModal.open();
+      this.updateConnectionInfo();
+      
+      // Debug: Check if modal is in DOM and has correct classes
+      setTimeout(() => {
+        const modalElement = document.getElementById('new-chat-modal');
+        console.log('🔧 Modal in DOM:', !!modalElement);
+        console.log('🔧 Modal classes:', modalElement?.className);
+        console.log('🔧 Modal style.display:', modalElement?.style.display);
+        console.log('🔧 Modal computed styles:', window.getComputedStyle(modalElement || document.body).display);
+      }, 100);
+    } else {
+      console.error('🔧 Modal does not exist! Creating fallback...');
+      this.createSimpleFallbackModal();
     }
+  }
+
+  // Add this method for debugging
+  private createSimpleFallbackModal(): void {
+    // Remove any existing modal
+    const existing = document.getElementById('new-chat-modal');
+    if (existing) existing.remove();
+    
+    // Create a very simple modal for testing
+    const modal = document.createElement('div');
+    modal.id = 'new-chat-modal';
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    `;
+    
+    modal.innerHTML = `
+      <div style="background: #2d2d2d; padding: 2rem; border-radius: 8px; color: white; max-width: 400px;">
+        <h3>🆕 New Chat (Fallback)</h3>
+        <p>This is a simple fallback modal to test if the issue is with the Modal component or CSS.</p>
+        <div style="margin: 1rem 0;">
+          <input type="text" id="simple-address" placeholder="IP:Port" style="width: 100%; padding: 0.5rem; margin-bottom: 1rem;">
+          <button id="simple-connect" style="padding: 0.5rem 1rem; background: #007acc; color: white; border: none; border-radius: 4px;">Connect</button>
+          <button id="simple-close" style="padding: 0.5rem 1rem; background: #666; color: white; border: none; border-radius: 4px; margin-left: 0.5rem;">Close</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Add event listeners
+    modal.querySelector('#simple-close')?.addEventListener('click', () => {
+      modal.remove();
+    });
+    
+    modal.querySelector('#simple-connect')?.addEventListener('click', async () => {
+      const input = modal.querySelector('#simple-address') as HTMLInputElement;
+      const address = input?.value.trim();
+      
+      if (address) {
+        try {
+          await this.handlePeerConnection(address, 'Test Chat');
+          modal.remove();
+        } catch (error) {
+          alert(`Connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      } else {
+        alert('Please enter an address');
+      }
+    });
+    
+    // Click outside to close
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.remove();
+      }
+    });
+    
+    console.log('🔧 Fallback modal created and should be visible');
   }
 
   private hideNewChatModal(): void {
-    const modal = document.getElementById('new-chat-modal');
-    const app = document.getElementById('app');
-    if (modal) {
-      modal.classList.remove('show');
-      if (app) {
-        app.classList.remove('blurred');
-        app.classList.add('modal-animate-out');
-        setTimeout(() => app.classList.remove('modal-animate-out'), 400);
-      }
-    }
-  }
-
-  private switchTab(tabName: string): void {
-    // Update tab buttons
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.classList.remove('active');
-    });
-    document.querySelector(`[data-tab="${tabName}"]`)?.classList.add('active');
-    
-    // Update tab content
-    document.querySelectorAll('.tab-content').forEach(content => {
-      content.classList.remove('active');
-    });
-    document.getElementById(`${tabName}-tab`)?.classList.add('active');
-  }
-
-  private async updateModalInfo(): Promise<void> {
-    const serverStatusEl = document.getElementById('modal-server-status');
-    const myAddressEl = document.getElementById('modal-my-address');
-    const myPublicKeyEl = document.getElementById('my-public-key') as HTMLTextAreaElement;
-
-    if (serverStatusEl) {
-      serverStatusEl.textContent = this.serverInfo ? 'Running' : 'Not started';
-    }
-
-    if (myAddressEl && this.serverInfo) {
-      myAddressEl.textContent = `${this.serverInfo.address}:${this.serverInfo.port}`;
-    }
-
-    if (myPublicKeyEl && this.identityKeys) {
-      myPublicKeyEl.value = this.identityKeys.publicKey;
-    }
-  }
-
-  private async startServer(): Promise<void> {
-    try {
-      this.serverInfo = await window.electronAPI.transport.startServer();
-      this.updateServerStatus();
-      this.updateModalInfo();
-    } catch (error) {
-      console.error('Failed to start server:', error);
-    }
+    this.newChatModal?.close();
   }
 
   private updateServerStatus(): void {
-    const serverStatusEl = document.getElementById('server-status');
-    const myAddressEl = document.getElementById('my-address');
-
-    if (serverStatusEl) {
-      serverStatusEl.textContent = this.serverInfo ? 
-        'Server: Running' : 'Server: Not started';
-    }
-
-    if (myAddressEl && this.serverInfo) {
-      myAddressEl.textContent = `Address: ${this.serverInfo.address}:${this.serverInfo.port}`;
-    }
-  }
-
-  // Chat functionality
-  private async connectToPeer(): Promise<void> {
-    const addressInput = document.getElementById('peer-address') as HTMLInputElement;
-    const nameInput = document.getElementById('chat-name') as HTMLInputElement;
-    
-    const addressText = addressInput.value.trim();
-    const chatName = nameInput.value.trim() || 'New Chat';
-
-    if (!addressText) {
-      alert('Please enter a peer address');
-      return;
-    }
-
-    try {
-      const [address, portStr] = addressText.split(':');
-      const port = parseInt(portStr);
-
-      if (!address || !port) {
-        throw new Error('Invalid address format. Use IP:PORT');
-      }
-
-      console.log(`Connecting to ${address}:${port}...`);
-      const connected = await window.electronAPI.transport.connect(address, port);
-      
-      if (connected) {
-        console.log('Successfully connected to peer');
-        this.hideNewChatModal();
-        
-        // Clear the form
-        addressInput.value = '';
-        nameInput.value = '';
-      } else {
-        alert('Failed to connect to peer');
-      }
-    } catch (error) {
-      console.error('Connection error:', error);
-      alert(`Connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    const serverStatus = document.getElementById('server-status');
+    if (serverStatus) {
+      serverStatus.textContent = 'Server: Running';
     }
   }
 
   private async handlePeerConnected(chatId: string, peerInfo: PeerInfo): Promise<void> {
-    // Create a new chat
     const chat: Omit<Chat, 'id'> = {
       name: `Chat with ${peerInfo.name}`,
       participants: ['me', peerInfo.id],
       peerAddress: peerInfo.address,
-      peerPublicKey: peerInfo.publicKey
+      peerPublicKey: peerInfo.publicKey,
+      type: 'direct',
+      isOnline: true
     };
 
     try {
       const savedChat = await window.electronAPI.db.saveChat(chat);
-      this.chats.set(savedChat.id, { ...savedChat, id: chatId }); // Use transport chatId
-      this.renderChatList();
-      
-      // Auto-select this chat
+      this.chats.set(savedChat.id, { ...savedChat, id: chatId });
+      this.refreshChatList();
       this.selectChat(chatId);
     } catch (error) {
       console.error('Failed to save new chat:', error);
@@ -583,12 +641,10 @@ export class ChatApp {
   private handlePeerDisconnected(chatId: string): void {
     const chat = this.chats.get(chatId);
     if (chat) {
-      // Update chat status or remove it
-      this.renderChatList();
+      chat.isOnline = false;
+      this.refreshChatList();
       
       if (this.currentChatId === chatId) {
-        this.currentChatId = null;
-        this.renderMessages();
         this.updateChatHeader();
       }
     }
@@ -596,29 +652,41 @@ export class ChatApp {
 
   private async handleIncomingMessage(chatId: string, data: any): Promise<void> {
     try {
-      // Save the incoming message
-      const message: Omit<Message, 'id' | 'timestamp'> = {
+      const message = {
         chatId,
         content: data.content || data.message || String(data),
-        sender: 'peer',
-        encrypted: false // We'll handle encryption later
+        sender: 'peer' as const,
+        encrypted: false
       };
 
       await window.electronAPI.db.saveMessage(message);
       
-      // If this chat is currently active, refresh the messages
       if (this.currentChatId === chatId) {
-        this.renderMessages();
+        this.refreshMessages();
       }
-      
-      // Update chat list to show new message
-      this.renderChatList();
+      this.refreshChatList();
     } catch (error) {
       console.error('Failed to handle incoming message:', error);
     }
   }
 
-  private renderChatList(): void {
+  protected async loadExistingChats(): Promise<void> {
+    try {
+      const chats = await window.electronAPI.db.getChats();
+      this.chats.clear();
+      
+      for (const chat of chats) {
+        this.chats.set(chat.id, chat);
+      }
+      
+      this.refreshChatList();
+      console.log(`✅ Loaded ${chats.length} chats`);
+    } catch (error) {
+      console.error('❌ Failed to load chats:', error);
+    }
+  }
+
+  protected refreshChatList(): void {
     const chatListEl = document.getElementById('chat-list');
     if (!chatListEl) return;
 
@@ -649,11 +717,11 @@ export class ChatApp {
     });
   }
 
-  private async selectChat(chatId: string): Promise<void> {
+  protected async selectChat(chatId: string): Promise<void> {
     this.currentChatId = chatId;
-    this.renderChatList(); // Update active state
+    this.refreshChatList();
     this.updateChatHeader();
-    await this.renderMessages();
+    await this.refreshMessages();
     
     // Enable message input
     const messageInput = document.getElementById('message-input') as HTMLInputElement;
@@ -676,11 +744,15 @@ export class ChatApp {
     const chat = this.chats.get(this.currentChatId);
     if (chat) {
       if (chatTitleEl) chatTitleEl.textContent = chat.name;
-      if (chatStatusEl) chatStatusEl.textContent = `Connected to ${chat.peerAddress}`;
+      if (chatStatusEl) {
+        chatStatusEl.textContent = chat.isOnline ? 
+          `Connected to ${chat.peerAddress}` : 
+          'Offline';
+      }
     }
   }
 
-  private async renderMessages(): Promise<void> {
+  protected async refreshMessages(): Promise<void> {
     const messagesEl = document.getElementById('messages');
     if (!messagesEl || !this.currentChatId) {
       if (messagesEl) {
@@ -710,8 +782,7 @@ export class ChatApp {
           <div class="message-sender">${message.sender}</div>
         </div>
       `).join('');
-
-      // Scroll to bottom
+      
       messagesEl.scrollTop = messagesEl.scrollHeight;
     } catch (error) {
       console.error('Failed to render messages:', error);
@@ -725,56 +796,69 @@ export class ChatApp {
     if (!messageText || !this.currentChatId) return;
 
     try {
-      // Save the message locally
-      const message: Omit<Message, 'id' | 'timestamp'> = {
+      // Direct database save for now (until MessageHandler is implemented)
+      const message = {
         chatId: this.currentChatId,
         content: messageText,
-        sender: 'me',
+        sender: 'me' as const,
         encrypted: false
       };
 
       await window.electronAPI.db.saveMessage(message);
       
-      // Send the message to the peer
-      await window.electronAPI.transport.send(this.currentChatId, {
-        content: messageText,
-        timestamp: Date.now()
-      });
-
-      // Clear input and refresh messages
-      input.value = '';
-      await this.renderMessages();
-      this.renderChatList(); // Update last message
+      // Try to send via transport if available
+      if (window.electronAPI.transport) {
+        await window.electronAPI.transport.send(this.currentChatId, {
+          content: messageText,
+          timestamp: Date.now()
+        });
+      }
       
+      input.value = '';
+      await this.refreshMessages();
+      this.refreshChatList();
     } catch (error) {
       console.error('Failed to send message:', error);
       alert('Failed to send message');
     }
   }
 
-  private async copyToClipboard(type: 'address' | 'key'): Promise<void> {
+  // Expose method for saving messages (called from HTML)
+  public async saveMessage(messageId: string): Promise<void> {
     try {
-      let textToCopy = '';
+      if (!this.currentChatId) return;
       
-      if (type === 'address' && this.serverInfo) {
-        textToCopy = `${this.serverInfo.address}:${this.serverInfo.port}`;
-      } else if (type === 'key' && this.identityKeys) {
-        textToCopy = this.identityKeys.publicKey;
-      }
-
-      await navigator.clipboard.writeText(textToCopy);
+      const messages = await window.electronAPI.db.getMessages(this.currentChatId);
+      const messageToSave = messages.find(m => m.id === messageId);
       
-      // Visual feedback
-      const button = document.getElementById(type === 'address' ? 'copy-address' : 'copy-key');
-      if (button) {
-        const originalText = button.textContent;
-        button.textContent = '✅';
-        setTimeout(() => {
-          button.textContent = originalText;
-        }, 1000);
+      if (messageToSave) {
+        console.log('Saving message:', messageToSave);
+        // Implement saved messages functionality when component is available
       }
     } catch (error) {
-      console.error('Failed to copy to clipboard:', error);
+      console.error('Failed to save message:', error);
     }
+  }
+
+  cleanup(): void {
+    // Cleanup modal components
+    this.connectionTab?.cleanup();
+    this.connectionInfoTab?.cleanup();
+    this.tabSystem?.cleanup();
+    this.newChatModal?.cleanup();
+    
+    // Cleanup all other components
+    for (const [name, component] of this.components) {
+      if (component.cleanup) {
+        console.log(`🧹 Cleaning up ${name}...`);
+        component.cleanup();
+      }
+    }
+  }
+}
+
+declare global {
+  interface Window {
+    chatApp: ChatApp;
   }
 }

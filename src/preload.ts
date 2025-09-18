@@ -35,10 +35,18 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.invoke('db:updateChat', chatId, updates),
   },
 
-  // Permission requests
+  // Enhanced Permission system
   permission: {
     request: (permission: string): Promise<boolean> => 
       ipcRenderer.invoke('permission:request', permission),
+    check: (permission: string): Promise<boolean> =>
+      ipcRenderer.invoke('permission:check', permission),
+    getStats: (): Promise<{granted: string[], denied: string[], trusted: string[]}> =>
+      ipcRenderer.invoke('permission:getStats'),
+    addTrustedOrigin: (origin: string): Promise<boolean> =>
+      ipcRenderer.invoke('permission:addTrustedOrigin', origin),
+    revokeAll: (): Promise<boolean> =>
+      ipcRenderer.invoke('permission:revokeAll'),
   },
 
   // Debug operations

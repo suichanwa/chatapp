@@ -17,8 +17,8 @@ export interface PeerConnection {
 export class TransportManager {
   private server: Server | null = null;
   private connections: Map<string, PeerConnection> = new Map();
-  private serverPort: number = 0;
-  private serverAddress: string = '';
+  private serverPort = 0; // Fixed: Removed inferrable type annotation
+  private serverAddress = ''; // Fixed: Removed inferrable type annotation
 
   constructor() {
     this.setupIPC();
@@ -42,7 +42,7 @@ export class TransportManager {
     });
   }
 
-  async startServer(port: number = 0): Promise<{ port: number; address: string }> {
+  async startServer(port = 0): Promise<{ port: number; address: string }> { // Fixed: Removed inferrable type annotation
     return new Promise((resolve, reject) => {
       this.server = createServer();
 
@@ -56,7 +56,7 @@ export class TransportManager {
       });
 
       this.server.listen(port, '127.0.0.1', () => {
-        const address = this.server!.address();
+        const address = this.server?.address(); // Fixed: Use optional chaining instead of non-null assertion
         if (address && typeof address === 'object') {
           this.serverPort = address.port;
           this.serverAddress = address.address;
@@ -72,8 +72,8 @@ export class TransportManager {
   private handleIncomingConnection(socket: Socket) {
     console.log('🌐 TransportManager: Incoming connection from', socket.remoteAddress);
 
-    const tempId = crypto.randomUUID();
-    let tempConnection: Partial<PeerConnection> = {
+    // Fixed: Use const instead of let since it's never reassigned
+    const tempConnection: Partial<PeerConnection> = {
       socket,
       authenticated: false
     };
@@ -124,16 +124,28 @@ export class TransportManager {
 
     socket.on('close', () => {
       console.log('🌐 TransportManager: Incoming connection closed');
+      // Clean up any temporary connections
+      for (const [connectionChatId, connection] of this.connections.entries()) {
+        if (connection.socket === socket) {
+          this.connections.delete(connectionChatId);
+          this.sendToRenderer('transport:peerDisconnected', connectionChatId);
+          break;
+        }
+      }
     });
   }
 
   async connectToPeer(address: string, port: number): Promise<boolean> {
     return new Promise((resolve, reject) => {
       const socket = connect(port, address);
-      const chatId = crypto.randomUUID();
+      // Fixed: Store the chatId in a scoped variable to be used later
+      let pendingChatId: string | null = null;
 
       socket.on('connect', () => {
         console.log(`🌐 TransportManager: Connected to peer at ${address}:${port}`);
+        
+        // Generate a temporary ID for tracking this connection attempt
+        pendingChatId = crypto.randomUUID();
         
         // Send handshake
         socket.write(JSON.stringify({
@@ -183,13 +195,27 @@ export class TransportManager {
       socket.on('close', () => {
         console.log('🌐 TransportManager: Connection closed');
         // Clean up connection
-        for (const [chatId, conn] of this.connections.entries()) {
+        for (const [connectionChatId, conn] of this.connections.entries()) {
           if (conn.socket === socket) {
-            this.connections.delete(chatId);
-            this.sendToRenderer('transport:peerDisconnected', chatId);
+            this.connections.delete(connectionChatId);
+            this.sendToRenderer('transport:peerDisconnected', connectionChatId);
             break;
           }
         }
+      });
+
+      // Set a timeout for connection attempts
+      const connectionTimeout = setTimeout(() => {
+        socket.destroy();
+        reject(new Error('Connection timeout'));
+      }, 10000); // 10 second timeout
+
+      socket.on('connect', () => {
+        clearTimeout(connectionTimeout);
+      });
+
+      socket.on('error', () => {
+        clearTimeout(connectionTimeout);
       });
     });
   }
@@ -207,12 +233,29 @@ export class TransportManager {
         console.error('🌐 TransportManager: Error handling message:', error);
       }
     });
+
+    connection.socket.on('error', (error) => {
+      console.error(`🌐 TransportManager: Connection error for chat ${connection.chatId}:`, error);
+      this.connections.delete(connection.chatId);
+      this.sendToRenderer('transport:peerDisconnected', connection.chatId);
+    });
+
+    connection.socket.on('close', () => {
+      console.log(`🌐 TransportManager: Connection closed for chat ${connection.chatId}`);
+      this.connections.delete(connection.chatId);
+      this.sendToRenderer('transport:peerDisconnected', connection.chatId);
+    });
   }
 
   async sendMessage(chatId: string, data: unknown): Promise<boolean> {
     const connection = this.connections.get(chatId);
     if (!connection) {
       console.error('🌐 TransportManager: No connection found for chat:', chatId);
+      return false;
+    }
+
+    if (!connection.authenticated) {
+      console.error('🌐 TransportManager: Connection not authenticated for chat:', chatId);
       return false;
     }
 
@@ -224,6 +267,7 @@ export class TransportManager {
       };
 
       connection.socket.write(JSON.stringify(message));
+      console.log(`🌐 TransportManager: Message sent to chat ${chatId}`);
       return true;
     } catch (error) {
       console.error('🌐 TransportManager: Error sending message:', error);
@@ -234,9 +278,12 @@ export class TransportManager {
   async disconnectPeer(chatId: string): Promise<void> {
     const connection = this.connections.get(chatId);
     if (connection) {
+      console.log(`🌐 TransportManager: Disconnecting peer for chat ${chatId}`);
       connection.socket.destroy();
       this.connections.delete(chatId);
       this.sendToRenderer('transport:peerDisconnected', chatId);
+    } else {
+      console.warn(`🌐 TransportManager: No connection found to disconnect for chat ${chatId}`);
     }
   }
 
@@ -249,17 +296,54 @@ export class TransportManager {
     });
   }
 
+  getConnectedPeers(): Array<{ chatId: string; peerInfo: PeerConnection['peerInfo'] }> {
+    return Array.from(this.connections.entries()).map(([chatId, connection]) => ({
+      chatId,
+      peerInfo: connection.peerInfo
+    }));
+  }
+
+  getServerInfo(): { port: number; address: string } | null {
+    if (this.server && this.serverPort > 0) {
+      return { port: this.serverPort, address: this.serverAddress };
+    }
+    return null;
+  }
+
+  isServerRunning(): boolean {
+    return this.server !== null && this.server.listening;
+  }
+
   async cleanup(): Promise<void> {
+    console.log('🌐 TransportManager: Starting cleanup...');
+    
     // Close all connections
-    for (const connection of this.connections.values()) {
+    for (const [chatId, connection] of this.connections.entries()) {
+      console.log(`🌐 TransportManager: Closing connection for chat ${chatId}`);
       connection.socket.destroy();
     }
     this.connections.clear();
 
     // Close server
     if (this.server) {
-      this.server.close();
-      this.server = null;
+      return new Promise<void>((resolve) => {
+        if (this.server?.listening) {
+          this.server.close(() => {
+            console.log('🌐 TransportManager: Server closed');
+            this.server = null;
+            this.serverPort = 0;
+            this.serverAddress = '';
+            resolve();
+          });
+        } else {
+          this.server = null;
+          this.serverPort = 0;
+          this.serverAddress = '';
+          resolve();
+        }
+      });
     }
+    
+    console.log('🌐 TransportManager: Cleanup completed');
   }
 }

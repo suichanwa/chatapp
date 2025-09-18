@@ -14,7 +14,10 @@ export interface ImageData {
   filename: string;
   mimeType: string;
   size: number;
+  width?: number;
+  height?: number;
   data: string; // Base64 encoded
+  thumbnail?: string; // Base64 encoded thumbnail
 }
 
 export interface Message {
@@ -26,6 +29,8 @@ export interface Message {
   encrypted: boolean;
   encryptedData?: EncryptedData;
   imageData?: ImageData;
+  type: 'text' | 'image' | 'system'; // Add message type
+  replyTo?: string; // For replies
 }
 
 export interface Chat {
@@ -35,6 +40,8 @@ export interface Chat {
   lastMessage?: Message;
   peerAddress?: string; // For P2P connection
   peerPublicKey?: string; // For encryption
+  type: 'direct' | 'saved'; // Add chat type
+  isOnline?: boolean;
 }
 
 export interface PeerInfo {
@@ -42,7 +49,7 @@ export interface PeerInfo {
   name: string;
   publicKey: string;
   address: string;
-  status: 'online' | 'offline' | 'connecting';
+  status?: 'online' | 'offline' | 'connecting';
 }
 
 export interface DebugLog {
@@ -86,10 +93,17 @@ export interface ElectronAPI {
     onPeerConnected: (callback: (chatId: string, peerInfo: PeerInfo) => void) => void;
     onPeerDisconnected: (callback: (chatId: string) => void) => void;
   };
+  // Add image processing APIs
+  image: {
+    processImage: (imageData: string, maxWidth?: number, maxHeight?: number) => Promise<{
+      resized: string;
+      thumbnail: string;
+      width: number;
+      height: number;
+      size: number;
+    }>;
+    compressImage: (imageData: string, quality?: number) => Promise<string>;
+  };
 }
 
-declare global {
-  interface Window {
-    electronAPI: ElectronAPI;
-  }
-}
+export {}; // Ensure this file is treated as a module
