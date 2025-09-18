@@ -1,10 +1,8 @@
 import { DebugPanel } from './DebugPanel';
-import { Modal } from './components/Modal';
-import { TabSystem } from './components/TabSystem';
-import { ConnectionTab } from './components/ConnectionTab';
-import { ConnectionInfoTab } from './components/ConnectionInfoTab';
+import { NewChatModal } from './components/UI/NewChatModal';
 import type { Component } from './types/components';
 import type { Message, Chat, PeerInfo } from '../types/index';
+import type { ChatAppPublic } from './types/public';
 
 // Simple EventBus implementation
 class EventBus {
@@ -42,17 +40,14 @@ export class ChatApp implements Component {
   protected chats: Map<string, Chat> = new Map();
   
   // Modal components
-  private newChatModal: Modal | null = null;
-  private tabSystem: TabSystem | null = null;
-  private connectionTab: ConnectionTab | null = null;
-  private connectionInfoTab: ConnectionInfoTab | null = null;
+  protected newChatModal: NewChatModal | null = null;
 
   constructor() {
     this.initializeComponents();
   }
 
   private initializeComponents(): void {
-    // Only initialize components that exist
+    // Initialize debug panel
     try {
       this.components.set('debug', new DebugPanel());
       console.log('✅ DebugPanel component initialized');
@@ -60,206 +55,21 @@ export class ChatApp implements Component {
       console.warn('⚠️ DebugPanel not available:', error);
     }
     
-    console.log('🔧 Initializing modal components...');
-  }
-
-  private async initializeNewChatModal(): Promise<void> {
+    // Initialize new chat modal
     try {
-      console.log('🔧 Creating basic modal without complex components...');
-      
-      // Create a simple modal without TabSystem dependencies first
-      this.newChatModal = new Modal(
-        'new-chat-modal',
-        '🆕 Create New Chat',
-        `
-          <div style="padding: 2rem;">
-            <div class="simple-tabs" style="display: flex; margin-bottom: 2rem; border-bottom: 1px solid #404040;">
-              <button class="simple-tab active" data-tab="connect" style="flex: 1; padding: 1rem; background: #2d2d2d; color: white; border: none; cursor: pointer;">
-                🌐 Connect to Peer
-              </button>
-              <button class="simple-tab" data-tab="info" style="flex: 1; padding: 1rem; background: #1a1a1a; color: #888; border: none; cursor: pointer;">
-                📡 My Connection Info
-              </button>
-            </div>
-            
-            <div class="simple-tab-content active" id="connect-content">
-              <h4>Connect to Peer</h4>
-              <div style="margin: 1rem 0;">
-                <label style="display: block; margin-bottom: 0.5rem;">Peer Address (IP:Port)</label>
-                <input type="text" id="simple-peer-address" placeholder="127.0.0.1:8080" style="width: 100%; padding: 0.75rem; background: #1a1a1a; border: 1px solid #404040; color: white; border-radius: 4px;">
-              </div>
-              <div style="margin: 1rem 0;">
-                <label style="display: block; margin-bottom: 0.5rem;">Chat Name</label>
-                <input type="text" id="simple-chat-name" placeholder="Chat with friend" style="width: 100%; padding: 0.75rem; background: #1a1a1a; border: 1px solid #404040; color: white; border-radius: 4px;">
-              </div>
-              <button id="simple-connect-btn" style="padding: 0.75rem 1.5rem; background: #007acc; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 1rem;">
-                Connect
-              </button>
-            </div>
-            
-            <div class="simple-tab-content" id="info-content" style="display: none;">
-              <h4>📡 Your Connection Info</h4>
-              <div style="margin: 1rem 0;">
-                <label style="display: block; margin-bottom: 0.5rem;">Server Status:</label>
-                <span id="modal-server-status" style="color: #888;">Not started</span>
-              </div>
-              <div style="margin: 1rem 0;">
-                <label style="display: block; margin-bottom: 0.5rem;">Your Address:</label>
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                  <span id="modal-my-address" style="color: #888;">Unknown</span>
-                  <button id="copy-address" style="padding: 0.25rem 0.5rem; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">📋</button>
-                </div>
-              </div>
-              <div style="margin: 1rem 0;">
-                <label style="display: block; margin-bottom: 0.5rem;">Your Public Key:</label>
-                <div style="display: flex; align-items: flex-start; gap: 0.5rem;">
-                  <textarea id="my-public-key" readonly style="flex: 1; min-height: 100px; padding: 0.5rem; background: #1a1a1a; border: 1px solid #404040; color: white; border-radius: 4px; font-family: monospace; font-size: 0.8rem;"></textarea>
-                  <button id="copy-key" style="padding: 0.25rem 0.5rem; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">📋</button>
-                </div>
-              </div>
-              <button id="start-server-btn" style="padding: 0.75rem 1.5rem; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 1rem;">
-                Start Server
-              </button>
-            </div>
-          </div>
-        `,
-        'new-chat-modal'
-      );
-
-      await this.newChatModal.initialize();
-      
-      // Add simple tab switching
-      this.setupSimpleTabSwitching();
-      
-      // Add simple event listeners
-      this.setupSimpleModalEventListeners();
-
-      console.log('✅ Simple modal created successfully');
-
-    } catch (error) {
-      console.error('❌ Failed to create modal:', error);
-      throw error;
-    }
-  }
-
-  private setupSimpleTabSwitching(): void {
-    const modal = this.newChatModal?.modal;
-    if (!modal) return;
-
-    const tabButtons = modal.querySelectorAll('.simple-tab');
-    const tabContents = modal.querySelectorAll('.simple-tab-content');
-
-    tabButtons.forEach(button => {
-      button.addEventListener('click', () => {
-        const targetTab = (button as HTMLElement).dataset.tab;
-        
-        // Remove active class from all tabs and contents
-        tabButtons.forEach(btn => {
-          btn.classList.remove('active');
-          (btn as HTMLElement).style.background = '#1a1a1a';
-          (btn as HTMLElement).style.color = '#888';
-        });
-        
-        tabContents.forEach(content => {
-          content.classList.remove('active');
-          (content as HTMLElement).style.display = 'none';
-        });
-        
-        // Add active class to clicked tab
-        button.classList.add('active');
-        (button as HTMLElement).style.background = '#2d2d2d';
-        (button as HTMLElement).style.color = 'white';
-        
-        // Show corresponding content
-        const targetContent = modal.querySelector(`#${targetTab}-content`);
-        if (targetContent) {
-          targetContent.classList.add('active');
-          (targetContent as HTMLElement).style.display = 'block';
+      this.newChatModal = new NewChatModal({
+        onConnect: async (address: string, name: string) => {
+          await this.handlePeerConnection(address, name);
+        },
+        onStartServer: async () => {
+          await this.handleStartServer();
         }
       });
-    });
-  }
-
-  private setupSimpleModalEventListeners(): void {
-    const modal = this.newChatModal?.modal;
-    if (!modal) return;
-
-    // Connect button
-    const connectBtn = modal.querySelector('#simple-connect-btn');
-    connectBtn?.addEventListener('click', async () => {
-      const addressInput = modal.querySelector('#simple-peer-address') as HTMLInputElement;
-      const nameInput = modal.querySelector('#simple-chat-name') as HTMLInputElement;
-      
-      const address = addressInput?.value.trim();
-      const name = nameInput?.value.trim() || 'Unknown';
-
-      if (!address) {
-        alert('Please enter a peer address');
-        return;
-      }
-
-      try {
-        await this.handlePeerConnection(address, name);
-        this.newChatModal?.close();
-        // Clear inputs
-        if (addressInput) addressInput.value = '';
-        if (nameInput) nameInput.value = '';
-      } catch (error) {
-        console.error('Connection failed:', error);
-        alert(`Connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    });
-
-    // Start server button
-    const startServerBtn = modal.querySelector('#start-server-btn');
-    startServerBtn?.addEventListener('click', async () => {
-      try {
-        await this.handleStartServer();
-      } catch (error) {
-        console.error('Failed to start server:', error);
-        alert(`Failed to start server: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    });
-
-    // Copy buttons
-    const copyAddressBtn = modal.querySelector('#copy-address');
-    const copyKeyBtn = modal.querySelector('#copy-key');
-
-    copyAddressBtn?.addEventListener('click', async () => {
-      const addressSpan = modal.querySelector('#modal-my-address');
-      const address = addressSpan?.textContent;
-      if (address && address !== 'Unknown') {
-        try {
-          await navigator.clipboard.writeText(address);
-          const btn = copyAddressBtn as HTMLElement;
-          const originalText = btn.textContent;
-          btn.textContent = '✅';
-          setTimeout(() => {
-            btn.textContent = originalText;
-          }, 2000);
-        } catch (error) {
-          console.error('Failed to copy address:', error);
-        }
-      }
-    });
-
-    copyKeyBtn?.addEventListener('click', async () => {
-      const keyTextarea = modal.querySelector('#my-public-key') as HTMLTextAreaElement;
-      const key = keyTextarea?.value;
-      if (key) {
-        try {
-          await navigator.clipboard.writeText(key);
-          const btn = copyKeyBtn as HTMLElement;
-          const originalText = btn.textContent;
-          btn.textContent = '✅';
-          setTimeout(() => {
-            btn.textContent = originalText;
-          }, 2000);
-        } catch (error) {
-          console.error('Failed to copy key:', error);
-        }
-      }
-    });
+      this.components.set('newChatModal', this.newChatModal);
+      console.log('✅ NewChatModal component initialized');
+    } catch (error) {
+      console.warn('⚠️ NewChatModal not available:', error);
+    }
   }
 
   private async handlePeerConnection(address: string, name: string): Promise<void> {
@@ -295,47 +105,9 @@ export class ChatApp implements Component {
     
     console.log(`Server started on ${result.address}:${result.port}`);
     
-    // Update modal info
-    this.updateModalServerInfo(result.address, result.port);
-    
-    // Update sidebar status
+    // Update modal and sidebar info
+    this.newChatModal?.updateServerInfo(result.address, result.port);
     this.updateServerStatus();
-  }
-
-  private updateModalServerInfo(address: string, port: number): void {
-    const modal = this.newChatModal?.modal;
-    if (!modal) return;
-
-    const serverStatus = modal.querySelector('#modal-server-status');
-    const myAddress = modal.querySelector('#modal-my-address');
-
-    if (serverStatus) {
-      (serverStatus as HTMLElement).textContent = 'Running';
-      (serverStatus as HTMLElement).style.color = '#28a745';
-    }
-
-    if (myAddress) {
-      (myAddress as HTMLElement).textContent = `${address}:${port}`;
-      (myAddress as HTMLElement).style.color = '#fff';
-    }
-  }
-
-  private async updateConnectionInfo(): Promise<void> {
-    const modal = this.newChatModal?.modal;
-    if (!modal) return;
-
-    // Update public key
-    if (window.electronAPI?.crypto) {
-      try {
-        const publicKey = await window.electronAPI.crypto.getPublicKey();
-        const keyTextarea = modal.querySelector('#my-public-key') as HTMLTextAreaElement;
-        if (keyTextarea && publicKey) {
-          keyTextarea.value = publicKey;
-        }
-      } catch (error) {
-        console.error('Failed to get public key:', error);
-      }
-    }
   }
 
   async initialize(): Promise<void> {
@@ -350,7 +122,7 @@ export class ChatApp implements Component {
     // Check ElectronAPI
     await this.checkElectronAPI();
 
-    // Initialize available components only
+    // Initialize all components
     for (const [name, component] of this.components) {
       try {
         console.log(`🔧 Initializing ${name}...`);
@@ -361,17 +133,6 @@ export class ChatApp implements Component {
       } catch (error) {
         console.error(`❌ Failed to initialize ${name}:`, error);
       }
-    }
-
-    // Try to initialize modal components
-    try {
-      console.log('🔧 Initializing modal components...');
-      await this.initializeNewChatModal();
-      console.log('✅ Modal components initialized successfully');
-    } catch (error) {
-      console.error('❌ Failed to initialize modal components:', error);
-      console.log('🔧 Creating simple fallback modal...');
-      this.createSimpleFallbackModal();
     }
 
     // Setup event listeners after components are initialized
@@ -518,30 +279,22 @@ export class ChatApp implements Component {
     newChatBtn?.addEventListener('click', () => this.showNewChatModal());
   }
 
-  private showNewChatModal(): void {
+  protected showNewChatModal(): void {
     console.log('🔧 showNewChatModal called');
     
     if (this.newChatModal) {
-      console.log('🔧 Modal exists, opening...');
+      console.log('🔧 Opening NewChatModal component...');
       this.newChatModal.open();
-      this.updateConnectionInfo();
-      
-      // Debug: Check if modal is in DOM and has correct classes
-      setTimeout(() => {
-        const modalElement = document.getElementById('new-chat-modal');
-        console.log('🔧 Modal in DOM:', !!modalElement);
-        console.log('🔧 Modal classes:', modalElement?.className);
-        console.log('🔧 Modal style.display:', modalElement?.style.display);
-        console.log('🔧 Modal computed styles:', window.getComputedStyle(modalElement || document.body).display);
-      }, 100);
     } else {
-      console.error('🔧 Modal does not exist! Creating fallback...');
+      console.error('🔧 NewChatModal not available');
       this.createSimpleFallbackModal();
     }
   }
 
-  // Add this method for debugging
+  // Fallback modal if NewChatModal component fails
   private createSimpleFallbackModal(): void {
+    console.log('🔧 Creating fallback modal...');
+    
     // Remove any existing modal
     const existing = document.getElementById('new-chat-modal');
     if (existing) existing.remove();
@@ -565,11 +318,11 @@ export class ChatApp implements Component {
     modal.innerHTML = `
       <div style="background: #2d2d2d; padding: 2rem; border-radius: 8px; color: white; max-width: 400px;">
         <h3>🆕 New Chat (Fallback)</h3>
-        <p>This is a simple fallback modal to test if the issue is with the Modal component or CSS.</p>
+        <p>NewChatModal component failed to load. Using simple fallback.</p>
         <div style="margin: 1rem 0;">
-          <input type="text" id="simple-address" placeholder="IP:Port" style="width: 100%; padding: 0.5rem; margin-bottom: 1rem;">
-          <button id="simple-connect" style="padding: 0.5rem 1rem; background: #007acc; color: white; border: none; border-radius: 4px;">Connect</button>
-          <button id="simple-close" style="padding: 0.5rem 1rem; background: #666; color: white; border: none; border-radius: 4px; margin-left: 0.5rem;">Close</button>
+          <input type="text" id="simple-address" placeholder="IP:Port" style="width: 100%; padding: 0.5rem; margin-bottom: 1rem; background: #1a1a1a; border: 1px solid #404040; color: white; border-radius: 4px;">
+          <button id="simple-connect" style="padding: 0.5rem 1rem; background: #007acc; color: white; border: none; border-radius: 4px; margin-right: 0.5rem;">Connect</button>
+          <button id="simple-close" style="padding: 0.5rem 1rem; background: #666; color: white; border: none; border-radius: 4px;">Close</button>
         </div>
       </div>
     `;
@@ -605,10 +358,6 @@ export class ChatApp implements Component {
     });
     
     console.log('🔧 Fallback modal created and should be visible');
-  }
-
-  private hideNewChatModal(): void {
-    this.newChatModal?.close();
   }
 
   private updateServerStatus(): void {
@@ -841,13 +590,7 @@ export class ChatApp implements Component {
   }
 
   cleanup(): void {
-    // Cleanup modal components
-    this.connectionTab?.cleanup();
-    this.connectionInfoTab?.cleanup();
-    this.tabSystem?.cleanup();
-    this.newChatModal?.cleanup();
-    
-    // Cleanup all other components
+    // Cleanup all components
     for (const [name, component] of this.components) {
       if (component.cleanup) {
         console.log(`🧹 Cleaning up ${name}...`);
@@ -859,6 +602,6 @@ export class ChatApp implements Component {
 
 declare global {
   interface Window {
-    chatApp: ChatApp;
+    chatApp: ChatAppPublic;
   }
 }
