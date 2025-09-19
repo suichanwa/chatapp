@@ -11,6 +11,8 @@ export default defineConfig({
     rollupOptions: {
       external: ['electron']
     },
-    outDir: '.vite/build'
+    // FIX: match main’s single-level outDir
+    outDir: '.vite/build', // keep in sync with main
+    emptyOutDir: true
   }
 });
