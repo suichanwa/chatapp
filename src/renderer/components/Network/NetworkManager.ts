@@ -6,6 +6,7 @@ export class NetworkManager implements Component {
   private eventBus = EventBus.getInstance();
   private serverInfo: { port: number; address: string } | null = null;
   private config: NetworkConfig;
+  private bound = false;
 
   constructor(config: NetworkConfig = { autoStart: true }) {
     this.config = config;
@@ -58,21 +59,24 @@ export class NetworkManager implements Component {
   }
 
   private setupTransportListeners(): void {
+    if (this.bound) return; // prevent double-binding
+    this.bound = true;
+
     if (!window.electronAPI?.transport) return;
 
     window.electronAPI.transport.onPeerConnected((chatId: string, peerInfo: PeerInfo) => {
-      console.log('🔗 Peer connected:', chatId, peerInfo);
       this.eventBus.emit('peer:connected', chatId, peerInfo);
     });
-
     window.electronAPI.transport.onPeerDisconnected((chatId: string) => {
-      console.log('🔗 Peer disconnected:', chatId);
       this.eventBus.emit('peer:disconnected', chatId);
     });
-
     window.electronAPI.transport.onMessage((chatId: string, data: unknown) => {
-      console.log('📨 Message received:', chatId, data);
-      this.eventBus.emit('message:received', { chatId, data });
+      // Do NOT save here; just forward once
+      this.eventBus.emit('message:received', { chatId, data: data as Record<string, unknown> });
+    });
+    // Optional signals
+    window.electronAPI.transport.onSignal?.((chatId: string, data: any) => {
+      this.eventBus.emit('signal:received', chatId, data);
     });
   }
 

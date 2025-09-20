@@ -309,6 +309,68 @@ body {
   border-radius: 10px 10px 0 0;
 }
 
+/* Message footer layout */
+.message-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+/* Time + date under each message */
+.message-time {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.1;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.message-time .time {
+  font-variant-numeric: tabular-nums;
+}
+
+.message-time .date {
+  margin-top: 2px;
+  font-size: 0.7rem;
+  color: #9aa0a6;
+}
+
+/* Privacy mode now hides only the timestamp until revealed */
+.message.sensitive:not(.revealed) .message-content,
+.message.sensitive:not(.revealed) .image-message,
+.message.sensitive:not(.revealed) .image-caption,
+.message.sensitive:not(.revealed) .message-image {
+  filter: none; /* ensure content is never blurred */
+}
+
+.message.sensitive .privacy-veil {
+  display: none !important; /* no overlay covering content */
+}
+
+/* Hide timestamp (date+time) until the message is revealed */
+.message.sensitive:not(.revealed) .message-time {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+/* Show timestamp when revealed */
+.message.sensitive.revealed .message-time {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Reduce accidental selection (optional) */
+.message.sensitive .message-content,
+.message.sensitive .image-caption {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* Footer stays inside the bubble width */
 .message-footer {
   display: flex;
@@ -319,6 +381,31 @@ body {
   padding: 0 0.25rem;
   width: 100%;
 }
+
+/* Timestamp hint */
+.message-time-wrapper {
+  position: relative;
+  min-height: 1.6em; /* reserve space for time/date stack */
+}
+
+.timestamp-hint {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  font-size: 0.7rem;
+  color: var(--muted);
+  opacity: 0;              /* default hidden */
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  pointer-events: none;    /* allow click-through for reveal */
+  transition: opacity 120ms ease;
+}
+
+/* Only show hint for sensitive + not revealed */
+.message:not(.sensitive) .timestamp-hint { display: none; }
+.message.sensitive:not(.revealed) .timestamp-hint { opacity: 0.18; }
+.message.sensitive:not(.revealed):hover .timestamp-hint { opacity: 0.3; }
+.message.sensitive.revealed .timestamp-hint { opacity: 0; }
 
 /* Mobile tweaks: allow a bit wider but never full width */
 @media (max-width: 768px) {

@@ -517,7 +517,7 @@
   }
 }
 
-/* Auto‑hide scrollbars (Chromium/WebKit + Firefox) */
+/* Stable, non-jumping scrollbars (no width change on hover) */
 .messages,
 #chat-list,
 .modal-body,
@@ -528,15 +528,14 @@
 .address-display,
 .key-textarea,
 textarea {
-  /* Prevent layout shift when scrollbar appears */
   scrollbar-gutter: stable both-edges;
-  /* Firefox default: hide */
-  scrollbar-width: none;
-  /* Firefox default color (hidden) */
+
+  /* Firefox: keep width thin always; thumb is transparent by default */
+  scrollbar-width: thin;
   scrollbar-color: transparent transparent;
 }
 
-/* Firefox on hover: show a thin thumb */
+/* Firefox: reveal thumb on hover without changing width */
 .messages:hover,
 #chat-list:hover,
 .modal-body:hover,
@@ -545,13 +544,12 @@ textarea {
 .debug-logs:hover,
 .key-display:hover,
 .address-display:hover,
-.key-textarea:hover,
+key-textarea:hover,
 textarea:hover {
-  scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.3) transparent;
 }
 
-/* WebKit default: hide completely */
+/* WebKit/Blink: keep width constant; thumb is transparent by default */
 .messages::-webkit-scrollbar,
 #chat-list::-webkit-scrollbar,
 .modal-body::-webkit-scrollbar,
@@ -560,27 +558,40 @@ textarea:hover {
 .debug-logs::-webkit-scrollbar,
 .key-display::-webkit-scrollbar,
 .address-display::-webkit-scrollbar,
-.key-textarea::-webkit-scrollbar,
+key-textarea::-webkit-scrollbar,
 textarea::-webkit-scrollbar {
-  width: 0;
-  height: 0;
+  width: 8px;   /* was 0 */
+  height: 8px;  /* was 0 */
 }
 
-/* WebKit on hover: show thin scrollbar */
-.messages:hover::-webkit-scrollbar,
-#chat-list:hover::-webkit-scrollbar,
-.modal-body:hover::-webkit-scrollbar,
-.tab-content:hover::-webkit-scrollbar,
-.tab-panel:hover::-webkit-scrollbar,
-.debug-logs:hover::-webkit-scrollbar,
-.key-display:hover::-webkit-scrollbar,
-.address-display:hover::-webkit-scrollbar,
-.key-textarea:hover::-webkit-scrollbar,
-textarea:hover::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+.messages::-webkit-scrollbar-track,
+#chat-list::-webkit-scrollbar-track,
+.modal-body::-webkit-scrollbar-track,
+.tab-content::-webkit-scrollbar-track,
+.tab-panel::-webkit-scrollbar-track,
+.debug-logs::-webkit-scrollbar-track,
+.key-display::-webkit-scrollbar-track,
+.address-display::-webkit-scrollbar-track,
+key-textarea::-webkit-scrollbar-track,
+textarea::-webkit-scrollbar-track {
+  background: transparent;
 }
 
+.messages::-webkit-scrollbar-thumb,
+#chat-list::-webkit-scrollbar-thumb,
+.modal-body::-webkit-scrollbar-thumb,
+.tab-content::-webkit-scrollbar-thumb,
+.tab-panel::-webkit-scrollbar-thumb,
+.debug-logs::-webkit-scrollbar-thumb,
+.key-display::-webkit-scrollbar-thumb,
+.address-display::-webkit-scrollbar-thumb,
+key-textarea::-webkit-scrollbar-thumb,
+textarea::-webkit-scrollbar-thumb {
+  background: transparent; /* invisible by default */
+  border-radius: 8px;
+}
+
+/* WebKit/Blink: only change thumb opacity on hover (no width change) */
 .messages:hover::-webkit-scrollbar-thumb,
 #chat-list:hover::-webkit-scrollbar-thumb,
 .modal-body:hover::-webkit-scrollbar-thumb,
@@ -589,23 +600,9 @@ textarea:hover::-webkit-scrollbar {
 .debug-logs:hover::-webkit-scrollbar-thumb,
 .key-display:hover::-webkit-scrollbar-thumb,
 .address-display:hover::-webkit-scrollbar-thumb,
-.key-textarea:hover::-webkit-scrollbar-thumb,
+key-textarea:hover::-webkit-scrollbar-thumb,
 textarea:hover::-webkit-scrollbar-thumb {
   background: rgba(255,255,255,0.25);
-  border-radius: 8px;
-}
-
-.messages:hover::-webkit-scrollbar-track,
-#chat-list:hover::-webkit-scrollbar-track,
-.modal-body:hover::-webkit-scrollbar-track,
-.tab-content:hover::-webkit-scrollbar-track,
-.tab-panel:hover::-webkit-scrollbar-track,
-.debug-logs:hover::-webkit-scrollbar-track,
-.key-display:hover::-webkit-scrollbar-track,
-.address-display:hover::-webkit-scrollbar-track,
-.key-textarea:hover::-webkit-scrollbar-track,
-textarea:hover::-webkit-scrollbar-track {
-  background: transparent;
 }
 
 /* --- Hotfix: ensure New Chat modal tabs are clickable --- */

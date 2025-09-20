@@ -18,8 +18,8 @@ export interface PeerConnection {
 // Security-related constants and config
 const PROTOCOL_VERSION = 1;
 const MAX_MESSAGE_BYTES = 1 * 1024 * 1024; // 1MB per JSON message
-const MAX_CONNECTIONS = 50;                // Limit concurrent peers
-const READ_IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 min idle timeout
+const MAX_CONNECTIONS = 50;
+const READ_IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 min
 const KEEPALIVE_MS = 30_000;
 
 const BIND_HOST = process.env.CHATAPP_BIND_HOST || '0.0.0.0';
@@ -32,7 +32,7 @@ function getLocalIPv4(): string | null {
   const nets = os.networkInterfaces();
   for (const name of Object.keys(nets)) {
     for (const ni of nets[name] || []) {
-      if (ni.family === 'IPv4' && !ni.internal) return ni.address;
+      if ((ni as any).family === 'IPv4' && !(ni as any).internal) return (ni as any).address;
     }
   }
   return null;
@@ -51,19 +51,24 @@ export class TransportManager {
   }
 
   private setupIPC() {
-    ipcMain.handle('transport:startServer', async (_, port?: number) => {
-      return this.startServer(port);
+    ipcMain.handle('transport:startServer', async (_e, port?: number) => {
+      const defaultPort = Number(process.env.CHATAPP_PORT) || 51750;
+      return this.startServer(port ?? defaultPort);
     });
 
-    ipcMain.handle('transport:connect', async (_, address: string, port: number) => {
+    ipcMain.handle('transport:connect', async (_e, address: string, port: number) => {
       return this.connectToPeer(address, port);
     });
 
-    ipcMain.handle('transport:send', async (_, chatId: string, data: unknown) => {
+    ipcMain.handle('transport:send', async (_e, chatId: string, data: unknown) => {
       return this.sendMessage(chatId, data);
     });
 
-    ipcMain.handle('transport:disconnect', async (_, chatId: string) => {
+    ipcMain.handle('transport:signal', async (_e, chatId: string, data: unknown) => {
+      return this.sendSignal(chatId, data as any);
+    });
+
+    ipcMain.handle('transport:disconnect', async (_e, chatId: string) => {
       return this.disconnectPeer(chatId);
     });
   }
@@ -74,7 +79,6 @@ export class TransportManager {
       this.server.maxConnections = MAX_CONNECTIONS;
 
       this.server.on('connection', (socket) => {
-        // Defensive socket settings
         this.attachSocketGuards(socket);
         this.handleIncomingConnection(socket);
       });
@@ -84,14 +88,15 @@ export class TransportManager {
         reject(error);
       });
 
-      // Bind host configurable; default 0.0.0.0 so peers can connect
       this.server.listen(port, BIND_HOST, () => {
         const address = this.server?.address();
         if (address && typeof address === 'object') {
           this.serverPort = address.port;
-          this.serverAddress = address.address; // might be 0.0.0.0
+          this.serverAddress = address.address; // may be 0.0.0.0
           this.serverAdvertisedAddress = getLocalIPv4() || this.serverAddress;
-          console.log(`🌐 TransportManager: Server listening on ${this.serverAddress}:${this.serverPort} (advertising ${this.serverAdvertisedAddress})`);
+          console.log(
+            `🌐 TransportManager: Server listening on ${this.serverAddress}:${this.serverPort} (advertising ${this.serverAdvertisedAddress})`
+          );
           resolve({ port: this.serverPort, address: this.serverAdvertisedAddress });
         } else {
           reject(new Error('Failed to get server address'));
@@ -114,15 +119,13 @@ export class TransportManager {
 
     const tempConnection: Partial<PeerConnection> = {
       socket,
-      authenticated: false
+      authenticated: false,
     };
 
-    // NDJSON framing with buffer and limits
     const onMessage = (message: any) => {
       try {
         if (!tempConnection.authenticated) {
           if (this.validateHandshake(message)) {
-            // Accept handshake
             const chatId = crypto.randomUUID();
             const peerConnection: PeerConnection = {
               chatId,
@@ -131,21 +134,19 @@ export class TransportManager {
                 id: message.peerId,
                 name: message.peerName || 'Unknown',
                 publicKey: message.publicKey || '',
-                address: socket.remoteAddress || 'unknown'
+                address: socket.remoteAddress || 'unknown',
               },
-              authenticated: true
+              authenticated: true,
             };
             this.connections.set(chatId, peerConnection);
 
-            // Respond
             this.writeJSON(socket, {
               type: 'handshake_response',
               protocol: PROTOCOL_VERSION,
               chatId,
-              success: true
+              success: true,
             });
 
-            // Notify renderer and switch to message handler
             this.sendToRenderer('transport:peerConnected', chatId, peerConnection.peerInfo);
             this.setupMessageHandler(peerConnection);
           } else {
@@ -155,9 +156,10 @@ export class TransportManager {
           return;
         }
 
-        // Authenticated: accept chat messages only
         if (message?.type === 'chat_message' && this.validatePayload(message?.payload)) {
           this.sendToRenderer('transport:message', (tempConnection as PeerConnection).chatId!, message.payload);
+        } else if (message?.type === 'signal' && this.validateSignal(message?.payload)) {
+          this.sendToRenderer('transport:signal', (tempConnection as PeerConnection).chatId!, message.payload);
         } else {
           console.warn('🌐 TransportManager: Dropping unexpected or oversized message');
         }
@@ -192,15 +194,13 @@ export class TransportManager {
 
       socket.on('connect', () => {
         console.log(`🌐 TransportManager: Connected to peer at ${address}:${port}`);
-
-        // Send handshake (with protocol + optional PSK)
         this.writeJSON(socket, {
           type: 'handshake',
           protocol: PROTOCOL_VERSION,
           peerId: crypto.randomUUID(),
           peerName: 'Anonymous User',
           publicKey: 'temp-public-key',
-          psk: PSK_HASH // may be null; receiver will accept if null as well
+          psk: PSK_HASH,
         });
       });
 
@@ -214,14 +214,13 @@ export class TransportManager {
                 id: crypto.randomUUID(),
                 name: 'Remote Peer',
                 publicKey: 'temp-public-key',
-                address: `${address}:${port}`
+                address: `${address}:${port}`,
               },
-              authenticated: true
+              authenticated: true,
             };
 
             this.connections.set(message.chatId, peerConnection);
             this.setupMessageHandler(peerConnection);
-
             this.sendToRenderer('transport:peerConnected', message.chatId, peerConnection.peerInfo);
             resolve(true);
           }
@@ -250,11 +249,10 @@ export class TransportManager {
         }
       });
 
-      // Connection attempt timeout
       const connectionTimeout = setTimeout(() => {
         socket.destroy(new Error('Connection timeout'));
         reject(new Error('Connection timeout'));
-      }, 10000);
+      }, 10_000);
 
       socket.on('connect', () => clearTimeout(connectionTimeout));
       socket.on('error', () => clearTimeout(connectionTimeout));
@@ -262,11 +260,12 @@ export class TransportManager {
   }
 
   private setupMessageHandler(connection: PeerConnection) {
-    // Replace data handler with authenticated NDJSON handler
     const onMessage = (message: any) => {
       try {
         if (message?.type === 'chat_message' && this.validatePayload(message?.payload)) {
           this.sendToRenderer('transport:message', connection.chatId, message.payload);
+        } else if (message?.type === 'signal' && this.validateSignal(message?.payload)) {
+          this.sendToRenderer('transport:signal', connection.chatId, message.payload);
         } else {
           console.warn(`🌐 TransportManager: Dropping invalid message on chat ${connection.chatId}`);
         }
@@ -278,7 +277,6 @@ export class TransportManager {
       }
     };
 
-    // Ensure only one 'data' listener
     connection.socket.removeAllListeners('data');
     connection.socket.on('data', (chunk) => this.handleSocketData(connection.socket, chunk, onMessage));
 
@@ -298,13 +296,10 @@ export class TransportManager {
   private validateHandshake(msg: any): boolean {
     if (!msg || msg.type !== 'handshake') return false;
     if (msg.protocol !== PROTOCOL_VERSION) return false;
-
-    // If PSK is configured locally, require matching psk hash
     if (PSK_HASH && msg.psk !== PSK_HASH) {
       console.warn('🌐 TransportManager: PSK mismatch');
       return false;
     }
-    // Basic shape check
     if (typeof msg.peerId !== 'string') return false;
     if (msg.publicKey && typeof msg.publicKey !== 'string') return false;
     return true;
@@ -315,7 +310,6 @@ export class TransportManager {
       const json = JSON.stringify(payload);
       if (Buffer.byteLength(json, 'utf8') > MAX_MESSAGE_BYTES) return false;
 
-      // Optional stricter checks for images
       if (payload?.type === 'image' && payload?.imageData?.data) {
         const approxBytes = Math.ceil((payload.imageData.data.length * 3) / 4);
         if (approxBytes > MAX_MESSAGE_BYTES) return false;
@@ -326,20 +320,25 @@ export class TransportManager {
     }
   }
 
+  private validateSignal(payload: any): boolean {
+    if (!payload || typeof payload !== 'object') return false;
+    if (payload.action === 'typing' || payload.action === 'stop_typing') return true;
+    if (payload.action === 'read' && typeof payload.lastSeenTs === 'number') return true;
+    return false;
+  }
+
   private handleSocketData(socket: Socket, chunk: Buffer, onMessage: (msg: any) => void): void {
     let buffer = this.readBuffers.get(socket) || Buffer.alloc(0);
     buffer = Buffer.concat([buffer, chunk]);
 
-    // Hard cap on buffer growth
     if (buffer.length > MAX_MESSAGE_BYTES * 2) {
       console.warn('🌐 TransportManager: Buffer limit exceeded, destroying socket');
       socket.destroy();
       return;
     }
 
-    // NDJSON: split by newline
     let index: number;
-    while ((index = buffer.indexOf(0x0a)) !== -1) {
+    while ((index = buffer.indexOf(0x0a)) !== -1) { // '\n'
       const line = buffer.slice(0, index).toString('utf8').trim();
       buffer = buffer.slice(index + 1);
       if (!line) continue;
@@ -378,29 +377,40 @@ export class TransportManager {
       console.error('🌐 TransportManager: No connection found for chat:', chatId);
       return false;
     }
-
     if (!connection.authenticated) {
       console.error('🌐 TransportManager: Connection not authenticated for chat:', chatId);
       return false;
     }
-
     if (!this.validatePayload(data)) {
-      console.warn('🌐 TransportManager: Outgoing payload rejected (too large or invalid)');
+      console.warn('🌐 TransportManager: Outgoing payload rejected');
       return false;
     }
 
     try {
-      const message = {
-        type: 'chat_message',
-        timestamp: Date.now(),
-        payload: data
-      };
-
+      const message = { type: 'chat_message', timestamp: Date.now(), payload: data };
       this.writeJSON(connection.socket, message);
       console.log(`🌐 TransportManager: Message sent to chat ${chatId}`);
       return true;
     } catch (error) {
       console.error('🌐 TransportManager: Error sending message:', error);
+      return false;
+    }
+  }
+
+  async sendSignal(
+    chatId: string,
+    data: { action: 'typing' | 'stop_typing' | 'read'; lastSeenTs?: number }
+  ): Promise<boolean> {
+    const connection = this.connections.get(chatId);
+    if (!connection) return false;
+    if (!this.validateSignal(data)) return false;
+
+    try {
+      const envelope = { type: 'signal', timestamp: Date.now(), payload: data };
+      this.writeJSON(connection.socket, envelope);
+      return true;
+    } catch (error) {
+      console.error('🌐 TransportManager: Error sending signal:', error);
       return false;
     }
   }
@@ -419,7 +429,7 @@ export class TransportManager {
 
   private sendToRenderer(channel: string, ...args: unknown[]) {
     const windows = BrowserWindow.getAllWindows();
-    windows.forEach(window => {
+    windows.forEach((window) => {
       if (window && !window.isDestroyed()) {
         window.webContents.send(channel, ...args);
       }
@@ -429,14 +439,14 @@ export class TransportManager {
   getConnectedPeers(): Array<{ chatId: string; peerInfo: PeerConnection['peerInfo'] }> {
     return Array.from(this.connections.entries()).map(([chatId, connection]) => ({
       chatId,
-      peerInfo: connection.peerInfo
+      peerInfo: connection.peerInfo,
     }));
   }
 
   getServerInfo(): { port: number; address: string } | null {
     if (!this.server) return null;
     return { port: this.serverPort, address: this.serverAdvertisedAddress || this.serverAddress };
-  }
+    }
 
   isServerRunning(): boolean {
     return this.server !== null && this.server.listening;
@@ -451,22 +461,20 @@ export class TransportManager {
     this.connections.clear();
 
     if (this.server) {
-      return new Promise<void>((resolve) => {
+      await new Promise<void>((resolve) => {
         if (this.server?.listening) {
           this.server.close(() => {
             console.log('🌐 TransportManager: Server closed');
-            this.server = null;
-            this.serverPort = 0;
-            this.serverAddress = '';
             resolve();
           });
         } else {
-          this.server = null;
-          this.serverPort = 0;
-          this.serverAddress = '';
           resolve();
         }
       });
+      this.server = null;
+      this.serverPort = 0;
+      this.serverAddress = '';
+      this.serverAdvertisedAddress = '';
     }
     console.log('🌐 TransportManager: Cleanup completed');
   }

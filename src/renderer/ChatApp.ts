@@ -6,6 +6,9 @@ import { EventBus } from './components/Utils/EventBus';
 import type { Component } from './types/components';
 import type { Message, Chat, PeerInfo } from '../types/index';
 import type { ChatAppPublic } from './types/public';
+import { SavedMessagesManager } from './components/Chat/SavedMessagesManager';
+import { renderTimestamp } from './components/UI/MessageTimestamp';
+import { NetworkManager } from './components/Network/NetworkManager';
 
 export class ChatApp implements Component {
   private eventBus = EventBus.getInstance();
@@ -25,9 +28,25 @@ export class ChatApp implements Component {
   private imageProcessor = new ImageProcessor();
   private imageViewer = new ImageViewer();
 
+  // Typing indicators
+  private typingTimers: Map<string, number> = new Map();
+  private lastTypingSentAt = 0;
+
+  // Privacy mode: allow revealing one at a time (timestamps only)
+  private privacyMode = true; // kept for future use
+  private revealedMessageId: string | null = null;
+  private revealTimer: number | null = null;
+
+  // Keep recent incoming signatures per chat for 2s
+  private recentIncoming: Map<string, Map<string, number>> = new Map();
+
   constructor() {
     // Register components
     this.components.set('debug', new DebugPanel());
+    this.components.set('savedMessages', new SavedMessagesManager());
+    // NetworkManager owns transport listeners; no auto-start to avoid double server start
+    this.components.set('network', new NetworkManager({ autoStart: false }));
+
     this.newChatModal = new NewChatModal({
       onConnect: this.handleModalConnect.bind(this),
       onStartServer: this.handleModalStartServer.bind(this),
@@ -36,26 +55,23 @@ export class ChatApp implements Component {
   }
 
   async initialize(): Promise<void> {
-    // Setup UI
     await this.setupUI();
-
-    // Check API availability
     await this.checkElectronAPI();
 
-    // Initialize registered components
     for (const [, component] of this.components) {
       if (component.initialize) await component.initialize();
     }
 
-    // Initialize helpers
     await this.imageProcessor.initialize();
     await this.imageViewer.initialize();
 
-    // Wire events
     this.setupEventListeners();
-
-    // Load chats
     await this.loadExistingChats();
+  }
+
+  // Helper to access transport without TS errors for extra methods (sendSignal/onSignal)
+  private transport(): any {
+    return (window as any).electronAPI?.transport;
   }
 
   private async checkElectronAPI(): Promise<void> {
@@ -82,27 +98,37 @@ export class ChatApp implements Component {
     // EventBus listeners
     this.eventBus.on('chat:selected', (chatId: string) => this.selectChat(chatId));
     this.eventBus.on('chat:updated', () => this.refreshChatList());
+
+    // Handle DB/UI refresh when our own sends are persisted
     this.eventBus.on('message:sent', (message: Message) => {
       if (this.currentChatId === message.chatId) this.refreshMessages();
       this.refreshChatList();
     });
-    this.eventBus.on('message:received', (message: Message) => {
-      if (this.currentChatId === message.chatId) this.refreshMessages();
-      this.refreshChatList();
+
+    // IMPORTANT: Handle incoming messages only via EventBus (from NetworkManager)
+    this.eventBus.on('message:received', ({ chatId, data }: { chatId: string; data: Record<string, unknown> }) => {
+      this.handleIncomingMessage(chatId, data);
     });
 
-    // Transport listeners
-    if (window.electronAPI?.transport) {
+    // Transport peer status (subscribe directly)
+    if (window.electronAPI?.transport?.onPeerConnected) {
       window.electronAPI.transport.onPeerConnected((chatId: string, peerInfo: PeerInfo) => {
         this.handlePeerConnected(chatId, peerInfo);
       });
+    }
+    if (window.electronAPI?.transport?.onPeerDisconnected) {
       window.electronAPI.transport.onPeerDisconnected((chatId: string) => {
         this.handlePeerDisconnected(chatId);
       });
-      window.electronAPI.transport.onMessage((chatId: string, data: unknown) => {
-        this.handleIncomingMessage(chatId, data);
-      });
     }
+
+    // Signals (typing/read)
+    this.transport()?.onSignal?.((chatId: string, data: any) => {
+      this.handleSignal(chatId, data);
+    });
+
+    // Saved Messages
+    this.eventBus.on('saved-messages:show', () => this.openSavedMessages());
   }
 
   protected async setupUI(): Promise<void> {
@@ -119,7 +145,10 @@ export class ChatApp implements Component {
           <aside class="chat-list">
             <div class="chat-list-header">
               <h2>Chats</h2>
-              <button id="new-chat-btn">+ New Chat</button>
+              <div class="chat-list-actions">
+                <button id="new-chat-btn">+ New Chat</button>
+                <button id="saved-messages-btn" title="Open Saved Messages">💾 Saved</button>
+              </div>
             </div>
             <ul id="chat-list"></ul>
             <div class="connection-info">
@@ -138,6 +167,7 @@ export class ChatApp implements Component {
                 <h3>🔒 Welcome to Secure Chat</h3>
                 <p>Your messages are end-to-end encrypted using RSA + AES encryption.</p>
                 <p>Click "New Chat" to connect to a peer or start your first conversation.</p>
+                <p>💾 Check out "Saved Messages" to save important messages!</p>
               </div>
             </div>
             <div class="message-composer">
@@ -152,10 +182,7 @@ export class ChatApp implements Component {
     `;
 
     this.setupBasicEventListeners();
-
-    // Initialize modal after DOM
     await this.newChatModal?.initialize();
-
     this.updateServerStatus();
   }
 
@@ -163,20 +190,21 @@ export class ChatApp implements Component {
     const sendBtn = document.getElementById('send-btn');
     const messageInput = document.getElementById('message-input') as HTMLInputElement | null;
     const newChatBtn = document.getElementById('new-chat-btn');
+    const savedBtn = document.getElementById('saved-messages-btn');
 
     sendBtn?.addEventListener('click', () => this.sendMessage());
-    messageInput?.addEventListener('keypress', (e) => {
+    messageInput?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         this.sendMessage();
       }
     });
     newChatBtn?.addEventListener('click', () => this.showNewChatModal());
+    savedBtn?.addEventListener('click', () => this.openSavedMessages());
 
     // Image select
     const imageBtn = document.getElementById('image-btn');
     const imageInput = document.getElementById('image-input') as HTMLInputElement | null;
-
     imageBtn?.addEventListener('click', () => imageInput?.click());
     imageInput?.addEventListener('change', async (e: Event) => {
       const file = (e.target as HTMLInputElement)?.files?.[0];
@@ -190,6 +218,31 @@ export class ChatApp implements Component {
         }
       }
     });
+
+    // Typing signals (throttled)
+    messageInput?.addEventListener('input', () => {
+      if (!this.currentChatId) return;
+      const now = Date.now();
+      if (now - this.lastTypingSentAt > 1200) {
+        this.lastTypingSentAt = now;
+        this.transport()?.sendSignal?.(this.currentChatId, { action: 'typing' });
+        setTimeout(() => {
+          if (Date.now() - this.lastTypingSentAt > 1100 && this.currentChatId) {
+            this.transport()?.sendSignal?.(this.currentChatId, { action: 'stop_typing' });
+          }
+        }, 1400);
+      }
+    });
+    messageInput?.addEventListener('blur', () => {
+      if (!this.currentChatId) return;
+      this.transport()?.sendSignal?.(this.currentChatId, { action: 'stop_typing' });
+    });
+
+    // Privacy: hide revealed message on Esc or when window loses focus
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') this.hideRevealedMessage();
+    });
+    window.addEventListener('blur', () => this.hideRevealedMessage());
   }
 
   protected showNewChatModal(): void {
@@ -277,6 +330,22 @@ export class ChatApp implements Component {
     }
   }
 
+  private isDuplicateIncoming(chatId: string, sig: string, ttlMs = 2000): boolean {
+    const now = Date.now();
+    let map = this.recentIncoming.get(chatId);
+    if (!map) {
+      map = new Map();
+      this.recentIncoming.set(chatId, map);
+    }
+    // purge expired
+    for (const [k, ts] of map) {
+      if (now - ts > ttlMs) map.delete(k);
+    }
+    if (map.has(sig)) return true;
+    map.set(sig, now);
+    return false;
+  }
+
   private async handleIncomingMessage(chatId: string, data: unknown): Promise<void> {
     try {
       const payload = (data ?? {}) as Record<string, unknown>;
@@ -287,6 +356,20 @@ export class ChatApp implements Component {
             ? payload.message
             : String(data);
       const type = (typeof payload.type === 'string' ? payload.type : 'text') as Message['type'];
+
+      // Build a compact signature for dedupe (sender is always 'peer' here)
+      const img = (payload.imageData as any)?.data as string | undefined;
+      const sig = [
+        'peer',
+        type,
+        payload.encrypted ? '1' : '0',
+        content,
+        img ? img.slice(0, 64) : ''
+      ].join('|');
+
+      if (this.isDuplicateIncoming(chatId, sig)) {
+        return; // drop duplicate burst
+      }
 
       const message: Omit<Message, 'id' | 'timestamp'> = {
         chatId,
@@ -303,6 +386,34 @@ export class ChatApp implements Component {
       this.refreshChatList();
     } catch (error) {
       console.error('Failed to handle incoming message:', error);
+    }
+  }
+
+  private handleSignal(chatId: string, data: any): void {
+    if (this.currentChatId !== chatId) return;
+    const chatStatus = document.getElementById('chat-status');
+    if (!chatStatus) return;
+
+    if (data.action === 'typing') {
+      chatStatus.textContent = 'Peer is typing…';
+      chatStatus.classList.add('typing');
+      const prev = this.typingTimers.get(chatId);
+      if (prev) window.clearTimeout(prev);
+      const t = window.setTimeout(() => {
+        if (chatStatus.textContent === 'Peer is typing…') {
+          chatStatus.textContent = '';
+          chatStatus.classList.remove('typing');
+        }
+      }, 3000);
+      this.typingTimers.set(chatId, t);
+    } else if (data.action === 'stop_typing') {
+      chatStatus.textContent = '';
+      chatStatus.classList.remove('typing');
+    } else if (data.action === 'read') {
+      chatStatus.textContent = 'Seen';
+      setTimeout(() => {
+        if (chatStatus.textContent === 'Seen') chatStatus.textContent = '';
+      }, 2000);
     }
   }
 
@@ -326,7 +437,15 @@ export class ChatApp implements Component {
       return;
     }
 
-    chatListEl.innerHTML = Array.from(this.chats.values()).map(chat => `
+    const ordered = Array.from(this.chats.values()).sort((a, b) => {
+      if (a.type === 'saved') return -1;
+      if (b.type === 'saved') return 1;
+      const at = a.lastMessage?.timestamp ?? 0;
+      const bt = b.lastMessage?.timestamp ?? 0;
+      return bt - at;
+    });
+
+    chatListEl.innerHTML = ordered.map(chat => `
       <li class="chat-item ${this.currentChatId === chat.id ? 'active' : ''}" data-chat-id="${chat.id}">
         <div class="chat-name">${chat.name}</div>
         <div class="chat-preview">
@@ -346,6 +465,18 @@ export class ChatApp implements Component {
         this.selectChat(id);
       });
     });
+  }
+
+  // Escape user content to prevent HTML injection
+  private escapeHtml(text: string): string {
+    const map: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    };
+    return String(text).replace(/[&<>"']/g, (ch) => map[ch]);
   }
 
   protected async refreshMessages(): Promise<void> {
@@ -372,49 +503,129 @@ export class ChatApp implements Component {
       }
 
       messagesEl.innerHTML = messages.map(message => {
-        const time = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const timestampHtml = renderTimestamp(message.timestamp);
+        const timestampBlock = `
+          <div class="message-time-wrapper">
+            ${timestampHtml}
+            <span class="timestamp-hint">show time</span>
+          </div>
+        `;
+
         const footer = `
           <div class="message-footer">
-            <div class="message-time">${time}</div>
-            ${message.sender !== 'me' && this.currentChatId !== 'saved-messages'
+            ${timestampBlock}
+            ${message.sender !== 'me' && this.chats.get(this.currentChatId!)?.type !== 'saved'
               ? `<button class="save-message-btn" onclick="window.chatApp.saveMessage('${message.id}')" title="Save Message">💾</button>`
               : ''}
           </div>
         `;
 
+        // Always hide timestamp for both parties (except system messages)
+        const isSensitive = message.type !== 'system';
+        const sensitiveClass = isSensitive ? 'sensitive' : '';
+
         if (message.type === 'image' && message.imageData) {
+          const safeCaption = this.escapeHtml(message.content);
+          const safeAlt = this.escapeHtml(message.imageData.filename);
           return `
-            <div class="message ${message.sender === 'me' ? 'sent' : 'received'}">
+            <div class="message ${message.sender === 'me' ? 'sent' : 'received'} ${sensitiveClass}" data-mid="${message.id}">
               <div class="image-message">
-                <img src="${message.imageData.data}" alt="${message.imageData.filename}" class="message-image">
-                <div class="image-caption">${message.content}</div>
+                <img src="${message.imageData.data}" alt="${safeAlt}" class="message-image">
+                <div class="image-caption">${safeCaption}</div>
               </div>
               ${footer}
             </div>
           `;
         }
 
+        const safeText = this.escapeHtml(message.content);
         return `
-          <div class="message ${message.sender === 'me' ? 'sent' : 'received'}">
-            <div class="message-content">${message.content}</div>
+          <div class="message ${message.sender === 'me' ? 'sent' : 'received'} ${sensitiveClass}" data-mid="${message.id}">
+            <div class="message-content">${safeText}</div>
             ${footer}
           </div>
         `;
       }).join('');
 
-      // Attach image viewer handlers with robust fallback
+      // Image viewer handlers
       const imgs = messagesEl.querySelectorAll<HTMLImageElement>('.message-image');
       imgs.forEach(img => {
         const caption = (img.closest('.image-message')?.querySelector('.image-caption') as HTMLElement | null)?.textContent || '';
         img.addEventListener('click', (ev) => {
           ev.preventDefault();
+          const container = img.closest('.message');
+          if (container && container.classList.contains('sensitive') && !container.classList.contains('revealed')) {
+            this.revealMessage(container.getAttribute('data-mid') || '');
+            return;
+          }
           this.openImageWithFallback(img, caption);
         });
       });
 
+      // Privacy handlers: reveal/hide
+      this.attachPrivacyHandlers(messagesEl);
+
       messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      // Send read receipt with last message timestamp
+      const last = messages[messages.length - 1];
+      if (last) {
+        this.transport()?.sendSignal?.(this.currentChatId, {
+          action: 'read',
+          lastSeenTs: last.timestamp
+        });
+      }
     } catch (error) {
       console.error('Failed to render messages:', error);
+    }
+  }
+
+  private attachPrivacyHandlers(messagesEl: HTMLElement): void {
+    if (!this.privacyMode) return;
+
+    messagesEl.querySelectorAll<HTMLElement>('.message.sensitive').forEach(el => {
+      el.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('button')) return;
+        const id = el.getAttribute('data-mid') || '';
+        if (!id) return;
+        this.revealMessage(id);
+      }, { passive: true });
+    });
+
+    const outsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.message.revealed')) this.hideRevealedMessage();
+    };
+    messagesEl.removeEventListener('click', outsideClick as any);
+    messagesEl.addEventListener('click', outsideClick);
+  }
+
+  private revealMessage(messageId: string): void {
+    if (!messageId) return;
+
+    if (this.revealedMessageId && this.revealedMessageId !== messageId) {
+      const prev = document.querySelector<HTMLElement>(`.message[data-mid="${this.revealedMessageId}"]`);
+      prev?.classList.remove('revealed');
+    }
+
+    const curr = document.querySelector<HTMLElement>(`.message[data-mid="${messageId}"]`);
+    if (!curr) return;
+    curr.classList.add('revealed');
+    this.revealedMessageId = messageId;
+
+    if (this.revealTimer) window.clearTimeout(this.revealTimer);
+    this.revealTimer = window.setTimeout(() => this.hideRevealedMessage(), 10_000);
+  }
+
+  private hideRevealedMessage(): void {
+    if (!this.revealedMessageId) return;
+    const el = document.querySelector<HTMLElement>(`.message[data-mid="${this.revealedMessageId}"]`);
+    el?.classList.remove('revealed');
+    this.revealedMessageId = null;
+    if (this.revealTimer) {
+      window.clearTimeout(this.revealTimer);
+      this.revealTimer = null;
     }
   }
 
@@ -425,8 +636,6 @@ export class ChatApp implements Component {
     } catch {
       // ignore error here; we'll fallback below
     }
-
-    // Verify after a tick whether the viewer is actually visible with the right image
     setTimeout(() => {
       if (!this.isViewerShowing(img.src)) {
         this.toggleInlineLightbox(img);
@@ -444,13 +653,11 @@ export class ChatApp implements Component {
     if (expectedSrc) {
       const img = overlay.querySelector('img') as HTMLImageElement | null;
       if (!img) return false;
-      // Some browsers may normalize data URLs; loose check by startsWith
       const actual = img.getAttribute('src') || '';
       if (!(actual === expectedSrc || actual.startsWith(expectedSrc.slice(0, 32)))) return false;
     }
-
     return true;
-    }
+  }
 
   private toggleInlineLightbox(img: HTMLImageElement): void {
     const expanded = img.classList.toggle('expanded');
@@ -495,9 +702,10 @@ export class ChatApp implements Component {
     if (chat) {
       if (chatTitle) chatTitle.textContent = chat.name;
       if (chatStatus) {
-        chatStatus.textContent = chat.type === 'saved'
-          ? 'Your saved messages'
-          : (chat.isOnline ? `Connected to ${chat.peerAddress}` : 'Offline');
+        chatStatus.textContent =
+          chat.type === 'saved'
+            ? 'Your saved messages'
+            : (chat.isOnline ? `Connected to ${chat.peerAddress}` : 'Offline');
       }
     }
   }
@@ -518,15 +726,22 @@ export class ChatApp implements Component {
 
       const saved = await window.electronAPI.db.saveMessage(message);
 
-      if (window.electronAPI.transport) {
-        await window.electronAPI.transport.send(this.currentChatId, {
-          content: messageText,
-          timestamp: saved.timestamp,
-          type: 'text'
-        });
+      // Skip transport for Saved Messages chat
+      const isSavedChat = this.chats.get(this.currentChatId)?.type === 'saved';
+      if (!isSavedChat) {
+        if (window.electronAPI.transport) {
+          await window.electronAPI.transport.send(this.currentChatId, {
+            content: messageText,
+            timestamp: saved.timestamp,
+            type: 'text'
+          });
+        }
       }
 
       if (input) input.value = '';
+      if (this.currentChatId) {
+        this.transport()?.sendSignal?.(this.currentChatId, { action: 'stop_typing' });
+      }
       await this.refreshMessages();
       this.refreshChatList();
     } catch (error) {
@@ -550,17 +765,48 @@ export class ChatApp implements Component {
     };
     const saved = await window.electronAPI.db.saveMessage(message);
 
-    if (window.electronAPI.transport) {
-      await window.electronAPI.transport.send(this.currentChatId, {
-        content: `📷 ${imageData.filename}`,
-        timestamp: saved.timestamp,
-        type: 'image',
-        imageData
-      });
+    // Skip transport for Saved Messages chat
+    const isSavedChat = this.chats.get(this.currentChatId)?.type === 'saved';
+    if (!isSavedChat) {
+      if (window.electronAPI.transport) {
+        await window.electronAPI.transport.send(this.currentChatId, {
+          content: `📷 ${imageData.filename}`,
+          timestamp: saved.timestamp,
+          type: 'image',
+          imageData
+        });
+      }
     }
 
     await this.refreshMessages();
     this.refreshChatList();
+  }
+
+  // Open or create the Saved Messages chat and select it
+  private async openSavedMessages(): Promise<void> {
+    try {
+      // Try local cache first
+      let savedChat = Array.from(this.chats.values()).find(c => c.type === 'saved');
+      if (!savedChat) {
+        // Ensure in DB
+        const existing = await window.electronAPI.db.getChats();
+        savedChat = existing.find(c => (c as any).type === 'saved');
+        if (!savedChat) {
+          const created = await window.electronAPI.db.saveChat({
+            name: '💾 Saved Messages',
+            participants: ['me'],
+            type: 'saved'
+          } as Omit<Chat, 'id'>);
+          savedChat = created;
+        }
+        this.chats.set(savedChat.id, savedChat);
+        this.refreshChatList();
+      }
+      await this.selectChat(savedChat.id);
+    } catch (err) {
+      console.error('Failed to open Saved Messages:', err);
+      alert('Failed to open Saved Messages');
+    }
   }
 
   // Expose method for saving messages (called from HTML)
@@ -579,11 +825,13 @@ export class ChatApp implements Component {
     for (const [, component] of this.components) {
       if (component.cleanup) component.cleanup();
     }
-    this.imageProcessor.cleanup();
-    this.imageViewer.cleanup();
+    this.chats.clear();
+    this.currentChatId = null;
+    this.serverInfo = null;
+    this.typingTimers.clear();
   }
 
-  // Fallback minimal modal if UI modal missing
+  // Minimal fallback modal if UI modal missing
   private createSimpleFallbackModal(): void {
     const existing = document.getElementById('new-chat-modal');
     if (existing) existing.remove();
@@ -633,6 +881,11 @@ export class ChatApp implements Component {
 declare global {
   interface Window {
     chatApp: ChatAppPublic;
-    electronAPI: import('../types/index').ElectronAPI;
   }
 }
+
+window.chatApp = new ChatApp();
+window.chatApp.initialize().catch((err) => {
+  console.error('Failed to initialize ChatApp:', err);
+  document.getElementById('app-status')!.textContent = '❌ Error initializing app';
+});

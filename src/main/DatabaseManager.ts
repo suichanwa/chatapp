@@ -95,14 +95,37 @@ export class DatabaseManager {
   }
 
   async saveMessage(message: Omit<Message, 'id' | 'timestamp'>): Promise<Message> {
+    // De-dup consecutive identical messages within a short window
+    const now = Date.now();
+    const chatMessages = this.data.messages.get(message.chatId) || [];
+    const last = chatMessages[chatMessages.length - 1];
+
+    const isSameImage =
+      (!!last?.imageData?.data === !!message.imageData?.data) &&
+      (!last?.imageData?.data ||
+        (last.imageData!.data === message.imageData!.data &&
+         (last.imageData!.mimeType === message.imageData!.mimeType)));
+
+    const isDuplicate =
+      !!last &&
+      last.sender === message.sender &&
+      (last.type || 'text') === (message.type || 'text') &&
+      (last.content || '') === (message.content || '') &&
+      isSameImage &&
+      Math.abs(now - (last.timestamp || now)) <= 1500;
+
+    if (isDuplicate) {
+      // Skip persisting duplicate; return the last message to keep API stable
+      return { ...last, type: last.type || 'text' };
+    }
+
     const fullMessage: Message = {
       ...message,
       id: crypto.randomUUID(),
-      timestamp: Date.now(),
+      timestamp: now,
       type: message.type || 'text', // Ensure type is set with default
     };
 
-    const chatMessages = this.data.messages.get(message.chatId) || [];
     chatMessages.push(fullMessage);
     this.data.messages.set(message.chatId, chatMessages);
 

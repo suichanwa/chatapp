@@ -73,16 +73,23 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.invoke('transport:connect', address, port),
     send: (chatId: string, data: unknown): Promise<boolean> => 
       ipcRenderer.invoke('transport:send', chatId, data),
-    disconnect: (chatId: string): Promise<void> =>
-      ipcRenderer.invoke('transport:disconnect', chatId),
-    onMessage: (callback: (chatId: string, data: unknown) => void): void => {
-      ipcRenderer.on('transport:message', (_, chatId: string, data: unknown) => callback(chatId, data));
+    onMessage: (cb: (chatId: string, data: any) => void) => {
+      ipcRenderer.on('transport:message', (_e, chatId, data) => cb(chatId, data));
     },
-    onPeerConnected: (callback: (chatId: string, peerInfo: PeerInfo) => void): void => {
-      ipcRenderer.on('transport:peerConnected', (_, chatId: string, peerInfo: PeerInfo) => callback(chatId, peerInfo));
+
+    // ADD: peer connection events so ChatApp.setupEventListeners works
+    onPeerConnected: (cb: (chatId: string, peerInfo: any) => void) => {
+      ipcRenderer.on('transport:peerConnected', (_e, chatId, peerInfo) => cb(chatId, peerInfo));
     },
-    onPeerDisconnected: (callback: (chatId: string) => void): void => {
-      ipcRenderer.on('transport:peerDisconnected', (_, chatId: string) => callback(chatId));
+    onPeerDisconnected: (cb: (chatId: string) => void) => {
+      ipcRenderer.on('transport:peerDisconnected', (_e, chatId) => cb(chatId));
+    },
+
+    // Signals (typing/read)
+    sendSignal: (chatId: string, data: { action: 'typing' | 'stop_typing' | 'read'; lastSeenTs?: number }): Promise<boolean> =>
+      ipcRenderer.invoke('transport:signal', chatId, data),
+    onSignal: (cb: (chatId: string, data: any) => void) => {
+      ipcRenderer.on('transport:signal', (_e, chatId, data) => cb(chatId, data));
     },
   },
 
