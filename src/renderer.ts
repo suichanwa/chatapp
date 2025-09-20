@@ -1,41 +1,45 @@
 import './index.css';
 import './styles/components.css';
-import { ChatApp } from './renderer/ChatApp';
 import type { ChatAppPublic } from './renderer/types/public';
-
-// Remove local interface and global Window declaration; use shared public type
+import { getPreferredTarget, setPreferredTarget } from './shared/EntryPointHandler';
 
 console.log('🔒 Secure Chat App starting...');
 
-// Set to false to use desktop mode
-const FORCE_MOBILE = false;
+// Small helper to let you switch entry target from DevTools:
+//   window.setEntryTarget('mobile' | 'desktop')
+(Object.assign(window as any, {
+  setEntryTarget: (target: 'mobile' | 'desktop') => setPreferredTarget(target),
+}) as any);
 
-if (FORCE_MOBILE) {
-  console.log('📱 FORCING MOBILE MODE FOR TESTING');
+const target = getPreferredTarget();
+
+if (target === 'mobile') {
+  console.log('📱 Loading MobileChatApp (entry handler)');
   import('./mobile/MobileChatApp')
     .then(({ MobileChatApp }) => {
       const app: ChatAppPublic = new MobileChatApp();
       window.chatApp = app;
-
       app.initialize().catch((error: unknown) => {
         console.error('Failed to initialize MobileChatApp:', error);
       });
     })
     .catch((error: unknown) => {
       console.error('Failed to load MobileChatApp module:', error);
-      // Fallback to desktop mode
-      const app: ChatAppPublic = new ChatApp();
-      window.chatApp = app;
-      app.initialize().catch((err: unknown) => {
-        console.error('Failed to initialize ChatApp (fallback):', err);
+      import('./renderer/ChatApp').then(({ ChatApp }) => {
+        const app: ChatAppPublic = new ChatApp();
+        window.chatApp = app;
+        app.initialize().catch((err: unknown) => console.error('Failed to initialize ChatApp (fallback):', err));
       });
     });
 } else {
-  console.log('💻 Running in desktop mode');
-  const app: ChatAppPublic = new ChatApp();
-  window.chatApp = app;
-
-  app.initialize().catch((error: unknown) => {
-    console.error('Failed to initialize ChatApp:', error);
-  });
+  console.log('💻 Loading ChatApp (entry handler)');
+  import('./renderer/ChatApp')
+    .then(({ ChatApp }) => {
+      const app: ChatAppPublic = new ChatApp();
+      window.chatApp = app;
+      app.initialize().catch((error: unknown) => console.error('Failed to initialize ChatApp:', error));
+    })
+    .catch((error: unknown) => {
+      console.error('Failed to load ChatApp module:', error);
+    });
 }
