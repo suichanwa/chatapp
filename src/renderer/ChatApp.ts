@@ -507,7 +507,7 @@ export class ChatApp implements Component {
         const timestampBlock = `
           <div class="message-time-wrapper">
             ${timestampHtml}
-            <span class="timestamp-hint">show time</span>
+            <span class="timestamp-hint">shoot tim</span>
           </div>
         `;
 
