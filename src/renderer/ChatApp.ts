@@ -153,7 +153,10 @@ export class ChatApp implements Component {
             <ul id="chat-list"></ul>
             <div class="connection-info">
               <div id="server-status">Server: Not started</div>
-              <div id="my-address">Address: Unknown</div>
+              <div class="address-row">
+                <div id="my-address">Address: Unknown</div>
+                <button id="copy-address-btn" title="Copy my address (Ctrl+Shift+A)">📋</button>
+              </div>
             </div>
           </aside>
           
@@ -191,6 +194,7 @@ export class ChatApp implements Component {
     const messageInput = document.getElementById('message-input') as HTMLInputElement | null;
     const newChatBtn = document.getElementById('new-chat-btn');
     const savedBtn = document.getElementById('saved-messages-btn');
+    const copyAddressBtn = document.getElementById('copy-address-btn') as HTMLButtonElement | null;
 
     sendBtn?.addEventListener('click', () => this.sendMessage());
     messageInput?.addEventListener('keydown', (e) => {
@@ -267,6 +271,36 @@ export class ChatApp implements Component {
         e.preventDefault();
         e.stopPropagation();
         this.showNewChatModal();
+      }
+    });
+
+    // Copy my address button
+    copyAddressBtn?.addEventListener('click', async () => {
+      const addr = this.getMyAddressString();
+      if (!addr) return;
+      await this.copyText(addr);
+      const serverStatus = document.getElementById('server-status');
+      if (serverStatus) {
+        const prev = serverStatus.textContent;
+        serverStatus.textContent = 'Address copied';
+        setTimeout(() => { if (serverStatus.textContent === 'Address copied') serverStatus.textContent = prev || ''; }, 1000);
+      }
+    });
+
+    // NEW: Ctrl+Shift+A to copy my address
+    document.addEventListener('keydown', async (e) => {
+      if (e.ctrlKey && e.shiftKey && (e.key === 'a' || e.key === 'A')) {
+        const addr = this.getMyAddressString();
+        if (!addr) return;
+        e.preventDefault();
+        e.stopPropagation();
+        await this.copyText(addr);
+        const serverStatus = document.getElementById('server-status');
+        if (serverStatus) {
+          const prev = serverStatus.textContent;
+          serverStatus.textContent = 'Address copied';
+          setTimeout(() => { if (serverStatus.textContent === 'Address copied') serverStatus.textContent = prev || ''; }, 1000);
+        }
       }
     });
 
@@ -349,6 +383,13 @@ export class ChatApp implements Component {
       myAddress.textContent = this.serverInfo
         ? `Address: ${this.serverInfo.address}:${this.serverInfo.port}`
         : 'Address: Unknown';
+    }
+    // Enable/disable copy address button based on availability
+    const copyBtn = document.getElementById('copy-address-btn') as HTMLButtonElement | null;
+    if (copyBtn) {
+      const available = !!this.serverInfo;
+      copyBtn.disabled = !available;
+      copyBtn.title = available ? 'Copy my address (Ctrl+Shift+A)' : 'Start server to get an address';
     }
   }
 
@@ -942,6 +983,36 @@ export class ChatApp implements Component {
     // Clear privacy state
     this.hideRevealedMessage();
     this.recentIncoming.clear();
+  }
+
+  // Helper: get "ip:port" from serverInfo or the rendered text
+  private getMyAddressString(): string | null {
+    if (this.serverInfo?.address && this.serverInfo?.port) {
+      return `${this.serverInfo.address}:${this.serverInfo.port}`;
+    }
+    const el = document.getElementById('my-address');
+    const text = (el?.textContent || '').trim();
+    const prefix = 'Address:';
+    if (!text.startsWith(prefix)) return null;
+    const value = text.slice(prefix.length).trim();
+    if (!value || value.toLowerCase() === 'unknown') return null;
+    return value;
+  }
+
+  // Helper: copy text to clipboard (used by address + messages)
+  private async copyText(t: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(t);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = t;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
   }
 }
 
