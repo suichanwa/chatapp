@@ -172,7 +172,7 @@ export class ChatApp implements Component {
             </div>
             <div class="message-composer">
               <input type="file" id="image-input" accept="image/*" style="display:none">
-              <button id="image-btn" class="image-btn" disabled title="Send Image">📷</button>
+              <button id="image-btn" class="image-btn" disabled title="Send Image (Ctrl+O)">📷</button>
               <input type="text" id="message-input" placeholder="Type a secure message..." disabled>
               <button id="send-btn" disabled>Send</button>
             </div>
@@ -203,7 +203,7 @@ export class ChatApp implements Component {
     savedBtn?.addEventListener('click', () => this.openSavedMessages());
 
     // Image select
-    const imageBtn = document.getElementById('image-btn');
+    const imageBtn = document.getElementById('image-btn') as HTMLButtonElement | null;
     const imageInput = document.getElementById('image-input') as HTMLInputElement | null;
     imageBtn?.addEventListener('click', () => imageInput?.click());
     imageInput?.addEventListener('change', async (e: Event) => {
@@ -216,6 +216,31 @@ export class ChatApp implements Component {
           console.error('Failed to send image:', err);
           alert(`Failed to send image: ${err instanceof Error ? err.message : 'Unknown error'}`);
         }
+      }
+    });
+
+    // NEW: Ctrl+T to focus the text input
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && (e.key === 't' || e.key === 'T')) {
+        if (!this.currentChatId) return;           // need a selected chat
+        if (!messageInput || messageInput.disabled) return;
+        e.preventDefault();
+        e.stopPropagation();
+        messageInput.focus();
+        // place caret at end
+        const len = messageInput.value.length;
+        messageInput.selectionStart = messageInput.selectionEnd = len;
+      }
+    });
+
+    // NEW: Ctrl+O to open image picker (already present)
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && (e.key === 'o' || e.key === 'O')) {
+        if (!this.currentChatId) return;
+        if (imageBtn?.disabled) return;
+        e.preventDefault();
+        e.stopPropagation();
+        imageInput?.click();
       }
     });
 
