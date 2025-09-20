@@ -261,6 +261,15 @@ export class ChatApp implements Component {
       }
     });
 
+    // NEW: Ctrl+N to open New Chat
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'n' || e.key === 'N')) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.showNewChatModal();
+      }
+    });
+
     // Typing signals (throttled)
     messageInput?.addEventListener('input', () => {
       if (!this.currentChatId) return;
@@ -923,53 +932,16 @@ export class ChatApp implements Component {
     this.chats.clear();
     this.currentChatId = null;
     this.serverInfo = null;
+
+    // Clear typing timers
+    for (const [, timer] of this.typingTimers) {
+      window.clearTimeout(timer);
+    }
     this.typingTimers.clear();
-  }
 
-  // Minimal fallback modal if UI modal missing
-  private createSimpleFallbackModal(): void {
-    const existing = document.getElementById('new-chat-modal');
-    if (existing) existing.remove();
-
-    const modal = document.createElement('div');
-    modal.id = 'new-chat-modal';
-    modal.style.cssText = `
-      position: fixed; inset: 0; background: rgba(0,0,0,0.8);
-      display: flex; align-items: center; justify-content: center; z-index: 10000;
-    `;
-    modal.innerHTML = `
-      <div style="background:#2d2d2d; padding: 2rem; border-radius: 8px; color: white; max-width: 400px;">
-        <h3>🆕 New Chat (Fallback)</h3>
-        <div style="margin:1rem 0;">
-          <input type="text" id="simple-address" placeholder="IP:Port"
-            style="width:100%; padding:0.5rem; margin-bottom:1rem; background:#1a1a1a; border:1px solid #404040; color:white; border-radius:4px;">
-          <button id="simple-connect" style="padding:0.5rem 1rem; background:#007acc; color:white; border:none; border-radius:4px; margin-right:0.5rem;">
-            Connect
-          </button>
-          <button id="simple-close" style="padding:0.5rem 1rem; background:#666; color:white; border:none; border-radius:4px;">
-            Close
-          </button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-
-    modal.querySelector('#simple-close')?.addEventListener('click', () => modal.remove());
-    modal.querySelector('#simple-connect')?.addEventListener('click', async () => {
-      const input = modal.querySelector('#simple-address') as HTMLInputElement;
-      const address = input?.value.trim();
-      if (address) {
-        try {
-          await this.handleModalConnect(address, 'Peer');
-          modal.remove();
-        } catch (error) {
-          alert(`Connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-      } else {
-        alert('Please enter an address');
-      }
-    });
-    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    // Clear privacy state
+    this.hideRevealedMessage();
+    this.recentIncoming.clear();
   }
 }
 
@@ -979,8 +951,11 @@ declare global {
   }
 }
 
-window.chatApp = new ChatApp();
-window.chatApp.initialize().catch((err) => {
-  console.error('Failed to initialize ChatApp:', err);
-  document.getElementById('app-status')!.textContent = '❌ Error initializing app';
-});
+if (typeof window !== 'undefined') {
+  (window as any).chatApp = new ChatApp();
+  (window as any).chatApp.initialize().catch((err: unknown) => {
+    console.error('Failed to initialize ChatApp:', err);
+    const status = document.getElementById('app-status');
+    if (status) status.textContent = '❌ Error initializing app';
+  });
+}
