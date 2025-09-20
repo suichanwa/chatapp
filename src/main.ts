@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, clipboard } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
@@ -10,6 +10,7 @@ import { KeyStore } from './main/KeyStore';
 import { PermissionBroker } from './main/PermissionBroker';
 import { DebugManager } from './main/DebugManager';
 import { TransportManager } from './main/TransportManager';
+import { secureClipboard } from './main/SecureClipboard';
 
 if (started) {
   app.quit();
@@ -93,6 +94,24 @@ class ChatApp {
     // Permission IPC handlers
     ipcMain.handle('permission:request', (_, permission) => 
       this.permissionBroker.request(permission));
+
+    // Clipboard (system)
+    ipcMain.handle('clipboard:writeText', (_e, text: string) => {
+      clipboard.writeText(text ?? '');
+      return true;
+    });
+    ipcMain.handle('clipboard:readText', () => clipboard.readText());
+
+    // Secure clipboard (in-app only)
+    ipcMain.handle('secureClipboard:write', (_e, text: string, ttlMs?: number) => {
+      secureClipboard.write(text ?? '', typeof ttlMs === 'number' ? ttlMs : 120_000);
+      return true;
+    });
+    ipcMain.handle('secureClipboard:read', () => secureClipboard.read());
+    ipcMain.handle('secureClipboard:clear', () => {
+      secureClipboard.clear();
+      return true;
+    });
   }
 
   createWindow() {

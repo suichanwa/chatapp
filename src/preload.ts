@@ -84,7 +84,23 @@ const electronAPI: ElectronAPI = {
     onPeerDisconnected: (callback: (chatId: string) => void): void => {
       ipcRenderer.on('transport:peerDisconnected', (_, chatId: string) => callback(chatId));
     },
-  }
+  },
+
+  clipboard: {
+    writeText: (text: string): Promise<boolean> =>
+      ipcRenderer.invoke('clipboard:writeText', text),
+    readText: (): Promise<string> =>
+      ipcRenderer.invoke('clipboard:readText'),
+  },
+
+  secureClipboard: {
+    writeText: (text: string, opts?: { ttlMs?: number }): Promise<boolean> =>
+      ipcRenderer.invoke('secureClipboard:write', text, opts?.ttlMs),
+    readText: (): Promise<string> =>
+      ipcRenderer.invoke('secureClipboard:read'),
+    clear: (): Promise<boolean> =>
+      ipcRenderer.invoke('secureClipboard:clear'),
+  },
 };
 
 console.log('🔧 PRELOAD: electronAPI object created:', !!electronAPI);

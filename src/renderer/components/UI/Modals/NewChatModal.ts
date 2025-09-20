@@ -219,27 +219,37 @@ export class NewChatModal implements UIComponent {
   private async copyToClipboard(type: 'address' | 'key'): Promise<void> {
     try {
       let textToCopy = '';
-      
+
       if (type === 'address') {
         const addressEl = document.getElementById('modal-my-address');
         textToCopy = addressEl?.textContent || '';
-      } else if (type === 'key') {
+      } else {
         const keyEl = document.getElementById('my-public-key') as HTMLTextAreaElement;
         textToCopy = keyEl?.value || '';
       }
-      
-      if (textToCopy) {
+
+      if (!textToCopy) return;
+
+      // Prefer in-app secure clipboard; falls back to system clipboard if unavailable
+      if (window.electronAPI?.secureClipboard) {
+        await window.electronAPI.secureClipboard.writeText(textToCopy, { ttlMs: 120_000 });
+      } else if (window.electronAPI?.clipboard) {
+        await window.electronAPI.clipboard.writeText(textToCopy);
+      } else if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(textToCopy);
-        
-        // Show feedback
-        const button = document.getElementById(type === 'address' ? 'copy-address' : 'copy-key');
-        if (button) {
-          const originalText = button.textContent;
-          button.textContent = '✅';
-          setTimeout(() => {
-            button.textContent = originalText;
-          }, 2000);
-        }
+      } else {
+        throw new Error('No clipboard API available');
+      }
+
+      const button = document.getElementById(type === 'address' ? 'copy-address' : 'copy-key');
+      if (button) {
+        const original = button.innerHTML;
+        button.innerHTML = '✅';
+        button.classList.add('success');
+        setTimeout(() => {
+          button.innerHTML = original;
+          button.classList.remove('success');
+        }, 1500);
       }
     } catch (error) {
       console.error('Failed to copy to clipboard:', error);

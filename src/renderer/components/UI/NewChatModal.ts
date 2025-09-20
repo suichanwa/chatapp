@@ -12,6 +12,7 @@ export class NewChatModal implements Component {
   private modal: Modal;
   private callbacks: NewChatModalCallbacks = {};
   private serverInfo: { address: string; port: number } | null = null;
+  private currentTab: 'connect' | 'info' = 'connect';
 
   constructor(callbacks: NewChatModalCallbacks = {}) {
     this.callbacks = callbacks;
@@ -28,123 +29,126 @@ export class NewChatModal implements Component {
     await this.modal.initialize();
     this.setupEventListeners();
     this.setupTabSwitching();
-    
     console.log('✅ NewChatModal initialized');
   }
 
   private getModalContent(): string {
+    // Modal already provides header and .modal-body wrapper.
+    // Return only the inner body contents.
     return `
-      <div class="new-chat-content">
-        <div class="modal-tabs">
-          <button class="modal-tab active" data-tab="connect">
-            <span class="tab-icon">🌐</span>
-            <span class="tab-label">Connect to Peer</span>
-          </button>
-          <button class="modal-tab" data-tab="info">
-            <span class="tab-icon">📡</span>
-            <span class="tab-label">My Connection Info</span>
-          </button>
-        </div>
-        
-        <div class="modal-tab-content active" id="connect-tab">
-          <div class="tab-section">
-            <h4 class="section-title">Connect to Peer</h4>
-            <p class="section-description">Enter the address of a peer to start a secure chat</p>
-            
-            <div class="form-group">
-              <label class="form-label">Peer Address (IP:Port)</label>
-              <input type="text" 
-                     id="peer-address" 
-                     class="form-input" 
-                     placeholder="127.0.0.1:8080" 
-                     autocomplete="off">
-              <small class="form-hint">Example: 192.168.1.100:8080</small>
-            </div>
-            
-            <div class="form-group">
-              <label class="form-label">Chat Name</label>
-              <input type="text" 
-                     id="chat-name" 
-                     class="form-input" 
-                     placeholder="Chat with friend" 
-                     autocomplete="off">
-              <small class="form-hint">Optional: Give this chat a custom name</small>
-            </div>
-            
-            <div class="form-actions">
-              <button id="connect-btn" class="btn btn-primary">
-                <span class="btn-icon">🔗</span>
-                <span class="btn-text">Connect</span>
-              </button>
-            </div>
+      <div class="connection-tabs" role="tablist">
+        <button class="tab-btn active" data-tab="connect" role="tab" aria-selected="true" aria-controls="connect-tab">
+          Connect to Peer
+        </button>
+        <button class="tab-btn" data-tab="info" role="tab" aria-selected="false" aria-controls="info-tab">
+          My Connection Info
+        </button>
+      </div>
+
+      <div class="tab-content active" id="connect-tab" role="tabpanel" aria-labelledby="connect">
+        <div class="tab-section">
+          <h4 class="section-title">Connect to Peer</h4>
+          <p class="section-description">Enter the address of a peer to start a secure chat</p>
+          
+          <div class="form-group">
+            <label class="form-label">Peer Address (IP:Port)</label>
+            <input type="text" 
+                   id="peer-address" 
+                   class="form-input" 
+                   placeholder="127.0.0.1:8080" 
+                   autocomplete="off">
+            <small class="form-hint">Example: 192.168.1.100:8080</small>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Chat Name</label>
+            <input type="text" 
+                   id="chat-name" 
+                   class="form-input" 
+                   placeholder="Chat with friend" 
+                   autocomplete="off">
+            <small class="form-hint">Optional: Give this chat a custom name</small>
+          </div>
+          
+          <div class="form-actions">
+            <button id="connect-btn" class="btn btn-primary">
+              <span class="btn-icon">🔗</span>
+              <span class="btn-text">Connect</span>
+            </button>
           </div>
         </div>
-        
-        <div class="modal-tab-content" id="info-tab">
-          <div class="tab-section">
-            <h4 class="section-title">Your Connection Info</h4>
-            <p class="section-description">Share this information with peers to connect to you</p>
-            
-            <div class="info-group">
-              <label class="info-label">Server Status:</label>
-              <div class="info-value">
-                <span id="modal-server-status" class="status-indicator">Not started</span>
-                <button id="start-server-btn" class="btn btn-success btn-small">
-                  <span class="btn-icon">🚀</span>
-                  <span class="btn-text">Start Server</span>
-                </button>
-              </div>
-            </div>
-            
-            <div class="info-group">
-              <label class="info-label">Your Address:</label>
-              <div class="info-value">
-                <code id="modal-my-address" class="address-display">Unknown</code>
-                <button id="copy-address" class="btn btn-secondary btn-small" title="Copy address">
-                  📋
-                </button>
-              </div>
-            </div>
-            
-            <div class="info-group">
-              <label class="info-label">Your Public Key:</label>
-              <div class="info-value key-container">
-                <textarea id="my-public-key" 
-                          class="key-display" 
-                          readonly 
-                          placeholder="Public key will appear here..."></textarea>
-                <button id="copy-key" class="btn btn-secondary btn-small" title="Copy public key">
-                  📋
-                </button>
-              </div>
-            </div>
+      </div>
+      
+      <div class="tab-content" id="info-tab" role="tabpanel" aria-labelledby="info">
+        <div class="info-section">
+          <h4>📡 Your Connection Info</h4>
+          <div class="info-item">
+            <label>Server Status:</label>
+            <span id="modal-server-status">Not started</span>
           </div>
+          <div class="info-item">
+            <label>Your Address:</label>
+            <span id="modal-my-address">Unknown</span>
+            <button
+              id="copy-address"
+              class="copy-btn"
+              title="Click: copy inside app (auto-clears). Shift/Ctrl/⌘: copy to system clipboard"
+            >📋</button>
+          </div>
+          <div class="info-item">
+            <label>Your Public Key:</label>
+            <textarea id="my-public-key" readonly></textarea>
+            <button
+              id="copy-key"
+              class="copy-btn"
+              title="Click: copy inside app (auto-clears). Shift/Ctrl/⌘: copy to system clipboard"
+            >📋</button>
+          </div>
+          <button id="start-server-btn" class="primary-btn">Start Server</button>
         </div>
       </div>
     `;
   }
 
+  // FIX: use correct selectors (.tab-btn / .tab-content) and centralize switching
   private setupTabSwitching(): void {
     const modalElement = this.modal.getElement();
     if (!modalElement) return;
 
-    const tabButtons = modalElement.querySelectorAll('.modal-tab');
-    const tabContents = modalElement.querySelectorAll('.modal-tab-content');
-
-    tabButtons.forEach(button => {
-      button.addEventListener('click', () => {
-        const targetTab = (button as HTMLElement).dataset.tab;
-        
-        // Remove active class from all tabs and contents
-        tabButtons.forEach(btn => btn.classList.remove('active'));
-        tabContents.forEach(content => content.classList.remove('active'));
-        
-        // Add active class to clicked tab and corresponding content
-        button.classList.add('active');
-        const targetContent = modalElement.querySelector(`#${targetTab}-tab`);
-        targetContent?.classList.add('active');
+    const tabButtons = modalElement.querySelectorAll<HTMLButtonElement>('.tab-btn');
+    tabButtons.forEach((button) => {
+      button.addEventListener('click', (e) => {
+        e.preventDefault();
+        const targetTab = (e.currentTarget as HTMLElement).dataset.tab as 'connect' | 'info' | undefined;
+        if (targetTab) this.switchTab(targetTab);
       });
     });
+  }
+
+  private switchTab(tabName: 'connect' | 'info'): void {
+    const modalElement = this.modal.getElement();
+    if (!modalElement) return;
+
+    this.currentTab = tabName;
+
+    // Buttons
+    modalElement.querySelectorAll('.tab-btn').forEach((btn) => {
+      btn.classList.remove('active');
+      (btn as HTMLElement).setAttribute('aria-selected', 'false');
+    });
+    const targetBtn = modalElement.querySelector(`.tab-btn[data-tab="${tabName}"]`) as HTMLElement | null;
+    targetBtn?.classList.add('active');
+    targetBtn?.setAttribute('aria-selected', 'true');
+
+    // Panels
+    modalElement.querySelectorAll('.tab-content').forEach((content) => content.classList.remove('active'));
+    const targetContent = modalElement.querySelector(`#${tabName}-tab`);
+    targetContent?.classList.add('active');
+
+    // When switching to info, refresh displayed values
+    if (tabName === 'info') {
+      this.updateConnectionInfo().catch(() => {});
+    }
   }
 
   private setupEventListeners(): void {
@@ -184,13 +188,23 @@ export class NewChatModal implements Component {
     const copyAddressBtn = modalElement.querySelector('#copy-address');
     const copyKeyBtn = modalElement.querySelector('#copy-key');
 
-    copyAddressBtn?.addEventListener('click', async () => {
+    copyAddressBtn?.addEventListener('click', async (ev) => {
       const addressElement = modalElement.querySelector('#modal-my-address');
-      const address = addressElement?.textContent;
-      
+      const address = addressElement?.textContent?.trim();
+      const preferSystem =
+        (ev as MouseEvent).shiftKey || (ev as MouseEvent).ctrlKey || (ev as MouseEvent as any).metaKey;
+
       if (address && address !== 'Unknown') {
         try {
-          await navigator.clipboard.writeText(address);
+          if (!preferSystem && window.electronAPI?.secureClipboard) {
+            await window.electronAPI.secureClipboard.writeText(address, { ttlMs: 120_000 });
+          } else if (window.electronAPI?.clipboard) {
+            await window.electronAPI.clipboard.writeText(address);
+          } else if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(address);
+          } else {
+            throw new Error('No clipboard API available');
+          }
           this.showCopySuccess(copyAddressBtn as HTMLElement);
         } catch (error) {
           console.error('Failed to copy address:', error);
@@ -199,13 +213,23 @@ export class NewChatModal implements Component {
       }
     });
 
-    copyKeyBtn?.addEventListener('click', async () => {
+    copyKeyBtn?.addEventListener('click', async (ev) => {
       const keyTextarea = modalElement.querySelector('#my-public-key') as HTMLTextAreaElement;
-      const key = keyTextarea?.value;
-      
+      const key = keyTextarea?.value?.trim();
+      const preferSystem =
+        (ev as MouseEvent).shiftKey || (ev as MouseEvent).ctrlKey || (ev as MouseEvent as any).metaKey;
+
       if (key) {
         try {
-          await navigator.clipboard.writeText(key);
+          if (!preferSystem && window.electronAPI?.secureClipboard) {
+            await window.electronAPI.secureClipboard.writeText(key, { ttlMs: 120_000 });
+          } else if (window.electronAPI?.clipboard) {
+            await window.electronAPI.clipboard.writeText(key);
+          } else if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(key);
+          } else {
+            throw new Error('No clipboard API available');
+          }
           this.showCopySuccess(copyKeyBtn as HTMLElement);
         } catch (error) {
           console.error('Failed to copy key:', error);
@@ -328,9 +352,9 @@ export class NewChatModal implements Component {
       errorElement = document.createElement('div');
       errorElement.className = 'error-message';
       
-      // Insert at the beginning of the modal content
-      const modalContent = modalElement.querySelector('.new-chat-content');
-      modalContent?.insertBefore(errorElement, modalContent.firstChild);
+      // Insert at the beginning of the modal body (fixed selector)
+      const modalBody = modalElement.querySelector('.modal-body');
+      modalBody?.insertBefore(errorElement, modalBody.firstChild);
     }
 
     errorElement.textContent = message;

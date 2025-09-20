@@ -67,7 +67,13 @@ export class ConnectionInfoTab implements Component {
                   <div class="address-value" id="server-address">
                     ${this.getAddressDisplay()}
                   </div>
-                  <button type="button" id="copy-address" class="btn btn-outline copy-btn" ${!this.serverInfo.isRunning ? 'disabled' : ''}>
+                  <button
+                    type="button"
+                    id="copy-address"
+                    class="btn btn-outline copy-btn"
+                    ${!this.serverInfo.isRunning ? 'disabled' : ''}
+                    title="Click: copy inside app (auto-clears). Shift/Ctrl/⌘: copy to system clipboard"
+                  >
                     <span class="btn-icon">📋</span>
                     <span class="btn-text">Copy</span>
                   </button>
@@ -96,7 +102,13 @@ export class ConnectionInfoTab implements Component {
                     readonly
                     placeholder="Generating public key..."
                   >${this.publicKey}</textarea>
-                  <button type="button" id="copy-key" class="btn btn-outline copy-btn" ${!this.publicKey ? 'disabled' : ''}>
+                  <button
+                    type="button"
+                    id="copy-key"
+                    class="btn btn-outline copy-btn"
+                    ${!this.publicKey ? 'disabled' : ''}
+                    title="Click: copy inside app (auto-clears). Shift/Ctrl/⌘: copy to system clipboard"
+                  >
                     <span class="btn-icon">📋</span>
                     <span class="btn-text">Copy</span>
                   </button>
@@ -121,16 +133,16 @@ export class ConnectionInfoTab implements Component {
       this.handleServerToggle();
     });
 
-    // Copy buttons
+    // Copy buttons (support Shift/Ctrl/Meta for system clipboard)
     const copyAddress = this.container.querySelector('#copy-address');
     const copyKey = this.container.querySelector('#copy-key');
 
-    copyAddress?.addEventListener('click', () => {
-      this.copyToClipboard('address');
+    copyAddress?.addEventListener('click', (e) => {
+      this.copyToClipboard('address', e as MouseEvent);
     });
 
-    copyKey?.addEventListener('click', () => {
-      this.copyToClipboard('key');
+    copyKey?.addEventListener('click', (e) => {
+      this.copyToClipboard('key', e as MouseEvent);
     });
   }
 
@@ -149,7 +161,7 @@ export class ConnectionInfoTab implements Component {
     }
   }
 
-  private async copyToClipboard(type: 'address' | 'key'): Promise<void> {
+  private async copyToClipboard(type: 'address' | 'key', evt?: MouseEvent): Promise<void> {
     let textToCopy = '';
     let buttonId = '';
 
@@ -160,11 +172,21 @@ export class ConnectionInfoTab implements Component {
       textToCopy = this.publicKey;
       buttonId = 'copy-key';
     }
-
     if (!textToCopy) return;
 
+    const preferSystem = !!evt && (evt.shiftKey || evt.ctrlKey || (evt as any).metaKey);
+
     try {
-      await navigator.clipboard.writeText(textToCopy);
+      if (!preferSystem && window.electronAPI?.secureClipboard) {
+        await window.electronAPI.secureClipboard.writeText(textToCopy, { ttlMs: 120_000 });
+      } else if (window.electronAPI?.clipboard) {
+        await window.electronAPI.clipboard.writeText(textToCopy);
+      } else if (navigator.clipboard?.writeText) {
+        // navigator.clipboard is system clipboard; requires focus and permissions in dev
+        await navigator.clipboard.writeText(textToCopy);
+      } else {
+        throw new Error('No clipboard API available');
+      }
       this.showCopySuccess(buttonId);
     } catch (error) {
       console.error('Failed to copy to clipboard:', error);

@@ -27,6 +27,7 @@
   bottom: 0;
   background: rgba(0, 0, 0, 0.8);
   backdrop-filter: blur(8px);
+  z-index: 10000; /* lower than modal-content */
 }
 
 .modal-container {
@@ -95,6 +96,7 @@
   padding: 0;
   overflow-y: auto;
   max-height: calc(90vh - 80px);
+  pointer-events: auto;
 }
 
 /* Tab System */
@@ -145,6 +147,11 @@
 .tab-content {
   flex: 1;
   position: relative;
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
 }
 
 .tab-panel {
@@ -221,12 +228,16 @@
   color: #fff;
   font-size: 0.9rem;
   transition: all 0.2s;
+  outline: none;
 }
 
 .form-input:focus {
-  outline: none;
   border-color: #007acc;
   box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
+}
+
+.form-input::placeholder {
+  color: #666;
 }
 
 .form-input.error {
@@ -309,466 +320,6 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
-  text-decoration: none;
-  position: relative;
-  overflow: hidden;
-}
-
-.btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #007acc 0%, #0066aa 100%);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(0, 122, 204, 0.3);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #0066aa 0%, #005588 100%);
-  box-shadow: 0 6px 16px rgba(0, 122, 204, 0.4);
-  transform: translateY(-1px);
-}
-
-.btn-secondary {
-  background: #666;
-  color: #fff;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #777;
-}
-
-.btn-outline {
-  background: transparent;
-  border: 2px solid #404040;
-  color: #ccc;
-}
-
-.btn-outline:hover:not(:disabled) {
-  border-color: #007acc;
-  color: #007acc;
-  background: rgba(0, 122, 204, 0.1);
-}
-
-.btn.success {
-  background: #28a745 !important;
-  color: #fff !important;
-}
-
-.btn-icon {
-  font-size: 1rem;
-}
-
-.btn.loading .btn-text {
-  opacity: 0;
-}
-
-.btn-loader {
-  position: absolute;
-  display: none;
-}
-
-.btn.loading .btn-loader {
-  display: block;
-}
-
-.spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top: 2px solid #fff;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* Connection Info */
-.connection-info {
-  max-width: 550px;
-  margin: 0 auto;
-}
-
-.info-header {
-  text-align: center;
-  margin-bottom: 2rem;
-}
-
-.info-icon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-}
-
-.info-header h4 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #fff;
-  margin: 0 0 0.5rem 0;
-}
-
-.info-description {
-  color: #888;
-  font-size: 0.9rem;
-  margin: 0;
-}
-
-.info-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.info-section {
-  background: #1a1a1a;
-  border-radius: 12px;
-  border: 1px solid #333;
-  overflow: hidden;
-}
-
-.section-header {
-  padding: 1rem 1.5rem;
-  background: #252525;
-  border-bottom: 1px solid #333;
-}
-
-.section-header h5 {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #fff;
-}
-
-.section-icon {
-  font-size: 1.1rem;
-}
-
-.section-content {
-  padding: 1.5rem;
-}
-
-.status-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem;
-  background: #2a2a2a;
-  border-radius: 8px;
-  border: 2px solid #404040;
-  transition: all 0.2s;
-}
-
-.status-card.running {
-  border-color: #28a745;
-  background: rgba(40, 167, 69, 0.1);
-}
-
-.address-display,
-.key-display {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-start;
-}
-
-.address-value {
-  flex: 1;
-  padding: 0.875rem 1rem;
-  background: #2a2a2a;
-  border: 1px solid #404040;
-  border-radius: 8px;
-  font-family: 'Monaco', 'Menlo', monospace;
-  font-size: 0.9rem;
-  color: #fff;
-  word-break: break-all;
-}
-
-.key-textarea {
-  flex: 1;
-  min-height: 120px;
-  padding: 0.875rem 1rem;
-  background: #2a2a2a;
-  border: 1px solid #404040;
-  border-radius: 8px;
-  font-family: 'Monaco', 'Menlo', monospace;
-  font-size: 0.8rem;
-  color: #fff;
-  resize: vertical;
-  line-height: 1.4;
-}
-
-.copy-btn {
-  min-width: 80px;
-  padding: 0.875rem 1rem;
-}
-
-.address-hint,
-.key-hint {
-  margin-top: 0.75rem;
-  font-size: 0.8rem;
-  color: #666;
-  font-style: italic;
-}
-
-/* NewChatModal Integration Styles */
-.new-chat-content {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 500px;
-}
-
-/* Modal Tabs */
-.modal-tabs {
-  display: flex;
-  background: #1a1a1a;
-  border-bottom: 1px solid #404040;
-  border-radius: 12px 12px 0 0;
-  overflow: hidden;
-}
-
-.modal-tab {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 1rem 1.5rem;
-  background: none;
-  border: none;
-  color: #888;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 0.9rem;
-  font-weight: 500;
-  position: relative;
-}
-
-.modal-tab:hover:not(.active) {
-  background: #2a2a2a;
-  color: #ccc;
-}
-
-.modal-tab.active {
-  color: #fff;
-  background: #2d2d2d;
-}
-
-.modal-tab.active::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(135deg, #007acc 0%, #0066aa 100%);
-}
-
-.tab-icon {
-  font-size: 1.1rem;
-}
-
-.tab-label {
-  font-weight: 600;
-}
-
-/* Tab Content */
-.modal-tab-content {
-  display: none;
-  flex: 1;
-  overflow-y: auto;
-}
-
-.modal-tab-content.active {
-  display: block;
-}
-
-.tab-section {
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.section-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #fff;
-  margin: 0 0 0.5rem 0;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.section-description {
-  color: #ccc;
-  font-size: 0.9rem;
-  margin: 0 0 1.5rem 0;
-  line-height: 1.5;
-}
-
-/* Form Elements */
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.form-label {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #fff;
-  margin-bottom: 0.25rem;
-}
-
-.form-input {
-  width: 100%;
-  padding: 0.875rem 1rem;
-  background: #1a1a1a;
-  border: 2px solid #404040;
-  border-radius: 8px;
-  color: #fff;
-  font-size: 0.9rem;
-  transition: all 0.2s ease;
-  outline: none;
-}
-
-.form-input:focus {
-  border-color: #007acc;
-  box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
-}
-
-.form-input::placeholder {
-  color: #666;
-}
-
-.form-hint {
-  font-size: 0.8rem;
-  color: #888;
-  font-style: italic;
-  margin-top: 0.25rem;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: center;
-  margin-top: 1rem;
-}
-
-/* Info Section */
-.info-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 1rem;
-  background: #1a1a1a;
-  border: 1px solid #333;
-  border-radius: 8px;
-}
-
-.info-label {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #ccc;
-  margin-bottom: 0.5rem;
-}
-
-.info-value {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-/* Status Indicators */
-.status-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  background: #2a2a2a;
-  color: #888;
-  border: 1px solid #404040;
-}
-
-.status-indicator.status-running {
-  background: rgba(40, 167, 69, 0.1);
-  border-color: #28a745;
-  color: #28a745;
-}
-
-.status-indicator.status-running::before {
-  content: '●';
-  font-size: 0.8rem;
-  animation: pulse 2s infinite;
-}
-
-/* Address Display */
-.address-display {
-  flex: 1;
-  padding: 0.875rem 1rem;
-  background: #2a2a2a;
-  border: 1px solid #404040;
-  border-radius: 8px;
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-  font-size: 0.9rem;
-  color: #fff;
-  word-break: break-all;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-}
-
-/* Key Display */
-.key-container {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-}
-
-.key-display {
-  flex: 1;
-  min-height: 120px;
-  max-height: 200px;
-  padding: 0.875rem 1rem;
-  background: #2a2a2a;
-  border: 1px solid #404040;
-  border-radius: 8px;
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-  font-size: 0.8rem;
-  color: #fff;
-  resize: vertical;
-  line-height: 1.4;
-  outline: none;
-}
-
-.key-display:focus {
-  border-color: #007acc;
-  box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
-}
-
-/* Enhanced Button Styles for NewChatModal */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.875rem 1.5rem;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
   text-decoration: none;
   position: relative;
   overflow: hidden;
@@ -965,3 +516,159 @@
     font-size: 0.7rem;
   }
 }
+
+/* Auto‑hide scrollbars (Chromium/WebKit + Firefox) */
+.messages,
+#chat-list,
+.modal-body,
+.tab-content,
+.tab-panel,
+.debug-logs,
+.key-display,
+.address-display,
+.key-textarea,
+textarea {
+  /* Prevent layout shift when scrollbar appears */
+  scrollbar-gutter: stable both-edges;
+  /* Firefox default: hide */
+  scrollbar-width: none;
+  /* Firefox default color (hidden) */
+  scrollbar-color: transparent transparent;
+}
+
+/* Firefox on hover: show a thin thumb */
+.messages:hover,
+#chat-list:hover,
+.modal-body:hover,
+.tab-content:hover,
+.tab-panel:hover,
+.debug-logs:hover,
+.key-display:hover,
+.address-display:hover,
+.key-textarea:hover,
+textarea:hover {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.3) transparent;
+}
+
+/* WebKit default: hide completely */
+.messages::-webkit-scrollbar,
+#chat-list::-webkit-scrollbar,
+.modal-body::-webkit-scrollbar,
+.tab-content::-webkit-scrollbar,
+.tab-panel::-webkit-scrollbar,
+.debug-logs::-webkit-scrollbar,
+.key-display::-webkit-scrollbar,
+.address-display::-webkit-scrollbar,
+.key-textarea::-webkit-scrollbar,
+textarea::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* WebKit on hover: show thin scrollbar */
+.messages:hover::-webkit-scrollbar,
+#chat-list:hover::-webkit-scrollbar,
+.modal-body:hover::-webkit-scrollbar,
+.tab-content:hover::-webkit-scrollbar,
+.tab-panel:hover::-webkit-scrollbar,
+.debug-logs:hover::-webkit-scrollbar,
+.key-display:hover::-webkit-scrollbar,
+.address-display:hover::-webkit-scrollbar,
+.key-textarea:hover::-webkit-scrollbar,
+textarea:hover::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.messages:hover::-webkit-scrollbar-thumb,
+#chat-list:hover::-webkit-scrollbar-thumb,
+.modal-body:hover::-webkit-scrollbar-thumb,
+.tab-content:hover::-webkit-scrollbar-thumb,
+.tab-panel:hover::-webkit-scrollbar-thumb,
+.debug-logs:hover::-webkit-scrollbar-thumb,
+.key-display:hover::-webkit-scrollbar-thumb,
+.address-display:hover::-webkit-scrollbar-thumb,
+.key-textarea:hover::-webkit-scrollbar-thumb,
+textarea:hover::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.25);
+  border-radius: 8px;
+}
+
+.messages:hover::-webkit-scrollbar-track,
+#chat-list:hover::-webkit-scrollbar-track,
+.modal-body:hover::-webkit-scrollbar-track,
+.tab-content:hover::-webkit-scrollbar-track,
+.tab-panel:hover::-webkit-scrollbar-track,
+.debug-logs:hover::-webkit-scrollbar-track,
+.key-display:hover::-webkit-scrollbar-track,
+.address-display:hover::-webkit-scrollbar-track,
+.key-textarea:hover::-webkit-scrollbar-track,
+textarea:hover::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* --- Hotfix: ensure New Chat modal tabs are clickable --- */
+/* If an overlay element exists, keep it behind the content */
+.modal-overlay {
+  z-index: 10000; /* lower than modal-content */
+}
+
+/* Raise modal interactive areas above any overlay and allow pointer events */
+.modal-content,
+.modal-header,
+.modal-body,
+.modal-tabs,
+.connection-tabs,
+.tab-button,
+.modal-tab,
+.tab-btn {
+  position: relative;
+  z-index: 10003;
+  pointer-events: auto;
+}
+
+/* Unify styles for .connection-tabs/.tab-btn (used by NewChatModal)
+   so they behave like .modal-tabs/.modal-tab */
+.connection-tabs {
+  display: flex;
+  background: #1a1a1a;
+  border-bottom: 1px solid #404040;
+}
+
+.connection-tabs .tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem;
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.connection-tabs .tab-btn:hover:not(.active) {
+  background: #2a2a2a;
+  color: #ccc;
+}
+
+.connection-tabs .tab-btn.active {
+  color: #fff;
+  background: #2d2d2d;
+  border-bottom: 3px solid #007acc;
+}
+
+/* Make sure tab content toggles as expected even if other rules exist */
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Keep modal body scrollable and interactive */
+.modal-body {
+  pointer-events: auto;
+}
+/* --- end hotfix --- */
