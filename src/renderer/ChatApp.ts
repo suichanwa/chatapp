@@ -244,6 +244,23 @@ export class ChatApp implements Component {
       }
     });
 
+    // NEW: Ctrl+Shift+C to copy message text
+    document.addEventListener('keydown', async (e) => {
+      if (e.ctrlKey && e.shiftKey && (e.key === 'c' || e.key === 'C')) {
+        if (!this.currentChatId) return;
+        e.preventDefault();
+        e.stopPropagation();
+        // Prefer the currently revealed message; otherwise copy the last message in the chat
+        let targetMessageId: string | null = this.revealedMessageId;
+        if (!targetMessageId) {
+          const all = await window.electronAPI.db.getMessages(this.currentChatId);
+          const last = all[all.length - 1];
+          targetMessageId = last?.id || null;
+        }
+        if (targetMessageId) await this.copyMessage(targetMessageId);
+      }
+    });
+
     // Typing signals (throttled)
     messageInput?.addEventListener('input', () => {
       if (!this.currentChatId) return;
@@ -536,9 +553,13 @@ export class ChatApp implements Component {
           </div>
         `;
 
+        // NEW: copy button (always shown)
+        const copyBtn = `<button class="copy-message-btn" onclick="window.chatApp.copyMessage('${message.id}')" title="Copy Text (Ctrl+Shift+C)">📋</button>`;
+
         const footer = `
           <div class="message-footer">
             ${timestampBlock}
+            ${copyBtn}
             ${message.sender !== 'me' && this.chats.get(this.currentChatId!)?.type !== 'saved'
               ? `<button class="save-message-btn" onclick="window.chatApp.saveMessage('${message.id}')" title="Save Message">💾</button>`
               : ''}
@@ -843,6 +864,55 @@ export class ChatApp implements Component {
       if (messageToSave) this.eventBus.emit('saved-messages:save', messageToSave);
     } catch (error) {
       console.error('Failed to save message:', error);
+    }
+  }
+
+  // NEW: Copy message text helper
+  public async copyMessage(messageId: string): Promise<void> {
+    try {
+      if (!this.currentChatId) return;
+      const messages = await window.electronAPI.db.getMessages(this.currentChatId);
+      const msg = messages.find(m => m.id === messageId);
+      if (!msg) return;
+
+      // Decide what to copy
+      let text = (msg.content ?? '').trim();
+      if (!text) {
+        if (msg.type === 'image' && msg.imageData) {
+          text = `📷 ${msg.imageData.filename}`;
+        } else {
+          text = '';
+        }
+      }
+
+      // Prefer navigator.clipboard, fallback to execCommand
+      const write = async (t: string) => {
+        try {
+          await navigator.clipboard.writeText(t);
+        } catch {
+          const ta = document.createElement('textarea');
+          ta.value = t;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+      };
+
+      await write(text);
+
+      // Optional UX hint in chat status
+      const chatStatus = document.getElementById('chat-status');
+      if (chatStatus) {
+        const prev = chatStatus.textContent;
+        chatStatus.textContent = 'Copied';
+        setTimeout(() => { if (chatStatus.textContent === 'Copied') chatStatus.textContent = prev || ''; }, 1000);
+      }
+    } catch (err) {
+      console.error('Failed to copy message:', err);
+      alert('Failed to copy');
     }
   }
 
