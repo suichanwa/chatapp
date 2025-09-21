@@ -9,10 +9,12 @@ export default defineConfig({
       fileName: () => 'preload.js'
     },
     rollupOptions: {
-      external: ['electron']
+      external: [
+        'electron',
+        '@electron-fonts/material-icons' // Add this to externals
+      ]
     },
-    // FIX: match main’s single-level outDir
-    outDir: '.vite/build', // keep in sync with main
-    emptyOutDir: true
+    outDir: '.vite/build',
+    emptyOutDir: false // Don't empty the dir since main.js is also there
   }
 });

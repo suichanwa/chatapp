@@ -9,10 +9,21 @@ export default defineConfig({
       fileName: () => 'main.js'
     },
     rollupOptions: {
-      external: ['electron', 'path', 'fs', 'crypto', 'os', 'node:path', 'node:fs/promises', 'node:crypto', 'node:os']
+      external: [
+        'electron', 
+        'path', 
+        'fs', 
+        'crypto', 
+        'os', 
+        'node:path', 
+        'node:fs/promises', 
+        'node:crypto', 
+        'node:os',
+        'net',
+        'child_process'
+      ]
     },
-    // FIX: avoid nested outDir that requires a missing parent
-    outDir: '.vite/build', // revert to Forge’s expected path
-    emptyOutDir: true
+    outDir: '.vite/build',
+    emptyOutDir: false // Don't empty since preload.js will also be here
   }
 });

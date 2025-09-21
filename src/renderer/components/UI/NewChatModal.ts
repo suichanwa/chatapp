@@ -19,7 +19,7 @@ export class NewChatModal implements Component {
     this.callbacks = callbacks;
     this.modal = new Modal(
       'new-chat-modal',
-      '🆕 Create New Chat',
+      'Create New Chat',
       this.getModalContent(),
       'new-chat-modal'
     );
@@ -41,16 +41,21 @@ export class NewChatModal implements Component {
     return `
       <div class="connection-tabs" role="tablist" aria-label="New Chat Tabs">
         <button class="tab-btn ${this.currentTab === 'connect' ? 'active' : ''}" data-tab="connect" role="tab" aria-selected="${this.currentTab === 'connect'}" aria-controls="connect-tab">
+          <span class="material-icons tab-icon">connect_without_contact</span>
           <span class="tab-label">Connect to Peer</span>
         </button>
         <button class="tab-btn ${this.currentTab === 'info' ? 'active' : ''}" data-tab="info" role="tab" aria-selected="${this.currentTab === 'info'}" aria-controls="info-tab">
+          <span class="material-icons tab-icon">info</span>
           <span class="tab-label">My Connection Info</span>
         </button>
       </div>
 
       <div class="tab-content ${this.currentTab === 'connect' ? 'active' : ''}" id="connect-tab" role="tabpanel" aria-labelledby="connect">
         <div class="tab-section">
-          <h4 class="section-title">Connect to Peer</h4>
+          <h4 class="section-title">
+            <span class="material-icons">connect_without_contact</span>
+            Connect to Peer
+          </h4>
           <p class="section-description">Enter the address of a peer to start a secure chat</p>
 
           <div class="form-group">
@@ -67,13 +72,15 @@ export class NewChatModal implements Component {
 
           <div class="form-actions">
             <button id="connect-btn" class="btn btn-primary">
-              <span class="btn-icon">🔗</span><span class="btn-text">Connect</span>
+              <span class="material-icons btn-icon">link</span>
+              <span class="btn-text">Connect</span>
             </button>
           </div>
 
           <div class="form-actions" style="margin-top:12px">
             <button id="start-server-btn-connect" class="btn btn-secondary">
-              <span class="btn-icon">🚀</span><span class="btn-text">Start Server</span>
+              <span class="material-icons btn-icon">rocket_launch</span>
+              <span class="btn-text">Start Server</span>
             </button>
           </div>
         </div>
@@ -81,7 +88,7 @@ export class NewChatModal implements Component {
 
       <div class="tab-content ${this.currentTab === 'info' ? 'active' : ''}" id="info-tab" role="tabpanel" aria-labelledby="info">
         <div class="info-section">
-          <h4>📡 Your Connection Info</h4>
+          <h4><span class="material-icons">wifi_tethering</span> Your Connection Info</h4>
           <div class="info-item">
             <label>Server Status:</label>
             <span id="modal-server-status">Not started</span>
@@ -89,16 +96,20 @@ export class NewChatModal implements Component {
           <div class="info-item">
             <label>Your Address:</label>
             <span id="modal-my-address">Unknown</span>
-            <button id="copy-address" class="copy-btn" title="Click: copy inside app (auto-clears). Shift/Ctrl/⌘: system clipboard">📋</button>
+            <button id="copy-address" class="copy-btn" title="Click: copy inside app (auto-clears). Shift/Ctrl/⌘: system clipboard">
+              <span class="material-icons">content_copy</span>
+            </button>
           </div>
           <div class="info-item">
             <label>Your Public Key:</label>
             <textarea id="my-public-key" class="key-textarea" readonly></textarea>
-            <button id="copy-key" class="copy-btn" title="Click: copy inside app (auto-clears). Shift/Ctrl/⌘: system clipboard">📋</button>
+            <button id="copy-key" class="copy-btn" title="Click: copy inside app (auto-clears). Shift/Ctrl/⌘: system clipboard">
+              <span class="material-icons">content_copy</span>
+            </button>
           </div>
 
           <div class="security-section" style="margin-top:12px">
-            <h4>🔐 Security</h4>
+            <h4><span class="material-icons">security</span> Security</h4>
             <div class="form-group">
               <label class="form-label">Pre‑Shared Key (PSK)</label>
               <input type="password" id="psk-input" class="form-input" placeholder="Optional">
@@ -121,13 +132,17 @@ export class NewChatModal implements Component {
               <small class="form-hint">Uncheck to keep a single private line; check to host multiple peers</small>
             </div>
             <div class="form-actions">
-              <button id="save-security-btn" class="btn btn-secondary">Save Security Settings</button>
+              <button id="save-security-btn" class="btn btn-secondary">
+                <span class="material-icons btn-icon">save</span>
+                Save Security Settings
+              </button>
             </div>
           </div>
 
           <div class="form-actions" style="margin-top:12px">
             <button id="start-server-btn" class="btn btn-primary">
-              <span class="btn-icon">🚀</span><span class="btn-text">Start Server</span>
+              <span class="material-icons btn-icon">rocket_launch</span>
+              <span class="btn-text">Start Server</span>
             </button>
           </div>
         </div>
@@ -317,7 +332,7 @@ export class NewChatModal implements Component {
 
       if (btn) {
         const old = btn.innerHTML;
-        btn.innerHTML = '✅ Saved';
+        btn.innerHTML = '<span class="material-icons btn-icon">check</span>Saved';
         btn.classList.add('success');
         setTimeout(() => { btn.innerHTML = old; btn.classList.remove('success'); }, 1500);
       }
@@ -325,7 +340,7 @@ export class NewChatModal implements Component {
       console.error('Failed to save security settings:', e);
       if (btn) {
         const old = btn.innerHTML;
-        btn.innerHTML = '❌ Failed';
+        btn.innerHTML = '<span class="material-icons btn-icon">error</span>Failed';
         btn.classList.add('error');
         setTimeout(() => { btn.innerHTML = old; btn.classList.remove('error'); }, 1500);
       }
@@ -391,27 +406,27 @@ export class NewChatModal implements Component {
   }
 
   private showCopySuccess(button: HTMLElement): void {
-    const originalText = button.innerHTML;
+    const originalContent = button.innerHTML;
     const originalClass = button.className;
 
-    button.innerHTML = '✅';
+    button.innerHTML = '<span class="material-icons">check</span>';
     button.className = originalClass + ' success';
 
     setTimeout(() => {
-      button.innerHTML = originalText;
+      button.innerHTML = originalContent;
       button.className = originalClass;
     }, 2000);
   }
 
   private showCopyError(button: HTMLElement): void {
-    const originalText = button.innerHTML;
+    const originalContent = button.innerHTML;
     const originalClass = button.className;
 
-    button.innerHTML = '❌';
+    button.innerHTML = '<span class="material-icons">error</span>';
     button.className = originalClass + ' error';
 
     setTimeout(() => {
-      button.innerHTML = originalText;
+      button.innerHTML = originalContent;
       button.className = originalClass;
     }, 2000);
   }
@@ -461,7 +476,7 @@ export class NewChatModal implements Component {
 
     if (connectBtn) {
       connectBtn.disabled = true;
-      connectBtn.innerHTML = '<span class="btn-icon">⏳</span><span class="btn-text">Connecting...</span>';
+      connectBtn.innerHTML = '<span class="material-icons btn-icon">hourglass_empty</span><span class="btn-text">Connecting...</span>';
       connectBtn.classList.add('loading');
     }
 
@@ -476,7 +491,7 @@ export class NewChatModal implements Component {
     } finally {
       if (connectBtn) {
         connectBtn.disabled = false;
-        connectBtn.innerHTML = '<span class="btn-icon">🔗</span><span class="btn-text">Connect</span>';
+        connectBtn.innerHTML = '<span class="material-icons btn-icon">link</span><span class="btn-text">Connect</span>';
         connectBtn.classList.remove('loading');
       }
     }
@@ -497,7 +512,7 @@ export class NewChatModal implements Component {
 
     if (startServerBtn) {
       startServerBtn.disabled = true;
-      startServerBtn.innerHTML = '<span class="btn-icon">⏳</span><span class="btn-text">Starting...</span>';
+      startServerBtn.innerHTML = '<span class="material-icons btn-icon">hourglass_empty</span><span class="btn-text">Starting...</span>';
       startServerBtn.classList.add('loading');
     }
 
@@ -509,7 +524,7 @@ export class NewChatModal implements Component {
       this.showError(`Failed to start server: ${error instanceof Error ? error.message : 'Unknown error'}`);
       if (startServerBtn) {
         startServerBtn.disabled = false;
-        startServerBtn.innerHTML = '<span class="btn-icon">🚀</span><span class="btn-text">Start Server</span>';
+        startServerBtn.innerHTML = '<span class="material-icons btn-icon">rocket_launch</span><span class="btn-text">Start Server</span>';
         startServerBtn.classList.remove('loading');
       }
     }
@@ -567,7 +582,7 @@ export class NewChatModal implements Component {
     [startServerBtnInfo, startServerBtnConnect].forEach((btn) => {
       if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<span class="btn-icon">✅</span><span class="btn-text">Server Running</span>';
+        btn.innerHTML = '<span class="material-icons btn-icon">check_circle</span><span class="btn-text">Server Running</span>';
         btn.classList.remove('loading');
       }
     });

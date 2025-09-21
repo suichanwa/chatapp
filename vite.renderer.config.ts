@@ -8,12 +8,24 @@ export default defineConfig({
     rollupOptions: {
       input: resolve(__dirname, 'index.html'),
     },
-    // Ensure proper base path for production
     emptyOutDir: true,
   },
   server: {
     port: 5173,
+    strictPort: true,
   },
-  // Important: set base to relative path for production
   base: './',
+  css: {
+    postcss: {
+      plugins: [
+        require('tailwindcss'),
+        require('autoprefixer'),
+      ],
+    },
+  },
+  optimizeDeps: {
+    include: ['tailwindcss', 'autoprefixer']
+  },
+  // Ensure proper handling of Material Icons and other assets
+  assetsInclude: ['**/*.woff', '**/*.woff2', '**/*.eot', '**/*.ttf'],
 });

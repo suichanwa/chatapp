@@ -5,6 +5,24 @@ console.log('🔧 PRELOAD: Starting preload script execution...');
 console.log('🔧 PRELOAD: contextBridge available:', !!contextBridge);
 console.log('🔧 PRELOAD: ipcRenderer available:', !!ipcRenderer);
 
+// Inject Material Icons when DOM is ready - with error handling
+window.addEventListener('DOMContentLoaded', async () => {
+  try {
+    // Dynamic import to avoid build issues
+    const MaterialIcons = await import('@electron-fonts/material-icons');
+    MaterialIcons.default.inject();
+    console.log('🔧 PRELOAD: Material Icons injected');
+  } catch (error) {
+    console.warn('🔧 PRELOAD: Failed to load Material Icons:', error);
+    // Fallback: inject Google Fonts CSS
+    const link = document.createElement('link');
+    link.href = 'https://fonts.googleapis.com/icon?family=Material+Icons';
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+    console.log('🔧 PRELOAD: Fallback Google Fonts Material Icons loaded');
+  }
+});
+
 // Define the API that will be exposed to the renderer
 const electronAPI: ElectronAPI = {
   // Crypto operations
@@ -17,38 +35,38 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.invoke('crypto:encrypt', data, publicKey),
     decrypt: (encryptedData: EncryptedData): Promise<string> => 
       ipcRenderer.invoke('crypto:decrypt', encryptedData),
-    getPublicKey: (): Promise<string | null> =>
-      ipcRenderer.invoke('crypto:getPublicKey'),
+    getPublicKey: (): Promise<string | null> => 
+      ipcRenderer.invoke('crypto:getPublicKey')
   },
   
-  // Database operations
+  // Database operations  
   db: {
     saveMessage: (message: Omit<Message, 'id' | 'timestamp'>): Promise<Message> => 
       ipcRenderer.invoke('db:saveMessage', message),
     getMessages: (chatId: string): Promise<Message[]> => 
       ipcRenderer.invoke('db:getMessages', chatId),
-    saveChat: (chat: Omit<Chat, 'id'>): Promise<Chat> =>
+    saveChat: (chat: Omit<Chat, 'id'>): Promise<Chat> => 
       ipcRenderer.invoke('db:saveChat', chat),
-    getChats: (): Promise<Chat[]> =>
+    getChats: (): Promise<Chat[]> => 
       ipcRenderer.invoke('db:getChats'),
-    updateChat: (chatId: string, updates: Partial<Chat>): Promise<Chat> =>
-      ipcRenderer.invoke('db:updateChat', chatId, updates),
+    updateChat: (chatId: string, updates: Partial<Chat>): Promise<Chat> => 
+      ipcRenderer.invoke('db:updateChat', chatId, updates)
   },
-
+  
   // Enhanced Permission system
   permission: {
     request: (permission: string): Promise<boolean> => 
       ipcRenderer.invoke('permission:request', permission),
-    check: (permission: string): Promise<boolean> =>
+    check: (permission: string): Promise<boolean> => 
       ipcRenderer.invoke('permission:check', permission),
-    getStats: (): Promise<{granted: string[], denied: string[], trusted: string[]}> =>
+    getStats: (): Promise<{granted: string[], denied: string[], trusted: string[]}> => 
       ipcRenderer.invoke('permission:getStats'),
-    addTrustedOrigin: (origin: string): Promise<boolean> =>
+    addTrustedOrigin: (origin: string): Promise<boolean> => 
       ipcRenderer.invoke('permission:addTrustedOrigin', origin),
-    revokeAll: (): Promise<boolean> =>
-      ipcRenderer.invoke('permission:revokeAll'),
+    revokeAll: (): Promise<boolean> => 
+      ipcRenderer.invoke('permission:revokeAll')
   },
-
+  
   // Debug operations
   debug: {
     getLogs: (): Promise<DebugLog[]> => 
@@ -62,38 +80,45 @@ const electronAPI: ElectronAPI = {
     },
     onLogsCleared: (callback: () => void): void => {
       ipcRenderer.on('debug:logsCleared', () => callback());
-    },
+    }
   },
-
+  
   // Transport layer
   transport: {
-    startServer: (port?: number) => ipcRenderer.invoke('transport:startServer', port),
-    // Now returns { ok: boolean, reason?: string }
-    connect: (address: string, port: number) => ipcRenderer.invoke('transport:connect', address, port),
-    send: (chatId: string, data: unknown) => ipcRenderer.invoke('transport:send', chatId, data),
-    disconnect: (chatId: string) => ipcRenderer.invoke('transport:disconnect', chatId),
-    onMessage: (cb: (chatId: string, data: any) => void) => {
-      ipcRenderer.on('transport:message', (_e, chatId, data) => cb(chatId, data));
+    startServer: (port?: number): Promise<{ port: number; address: string }> => 
+      ipcRenderer.invoke('transport:startServer', port),
+    connect: (address: string, port: number): Promise<boolean | {ok: boolean, reason?: string}> => 
+      ipcRenderer.invoke('transport:connect', address, port),
+    send: (chatId: string, data: unknown): Promise<boolean> => 
+      ipcRenderer.invoke('transport:send', chatId, data),
+    disconnect: (chatId: string): Promise<void> => 
+      ipcRenderer.invoke('transport:disconnect', chatId),
+    onMessage: (callback: (chatId: string, data: unknown) => void): void => {
+      ipcRenderer.on('transport:message', (_, chatId: string, data: unknown) => callback(chatId, data));
     },
-    onPeerConnected: (cb: (chatId: string, peerInfo: any) => void) => {
-      ipcRenderer.on('transport:peerConnected', (_e, chatId, peerInfo) => cb(chatId, peerInfo));
+    onPeerConnected: (callback: (chatId: string, peerInfo: PeerInfo) => void): void => {
+      ipcRenderer.on('transport:peerConnected', (_, chatId: string, peerInfo: PeerInfo) => callback(chatId, peerInfo));
     },
-    onPeerDisconnected: (cb: (chatId: string) => void) => {
-      ipcRenderer.on('transport:peerDisconnected', (_e, chatId) => cb(chatId));
+    onPeerDisconnected: (callback: (chatId: string) => void): void => {
+      ipcRenderer.on('transport:peerDisconnected', (_, chatId: string) => callback(chatId));
     },
-    // NEW
-    setPublicMode: (enabled: boolean) => ipcRenderer.invoke('transport:setPublicMode', enabled),
-    setPSK: (psk: string | null) => ipcRenderer.invoke('transport:setPSK', psk),
-    allowOnly: (address: string | null) => ipcRenderer.invoke('transport:allowOnly', address),
+    setPSK: (psk: string | null): Promise<boolean> => 
+      ipcRenderer.invoke('transport:setPSK', psk),
+    allowOnly: (address: string | null): Promise<boolean> => 
+      ipcRenderer.invoke('transport:allowOnly', address),
+    setPublicMode: (enabled: boolean): Promise<boolean> => 
+      ipcRenderer.invoke('transport:setPublicMode', enabled)
   },
-
+  
+  // Clipboard operations
   clipboard: {
-    writeText: (text: string): Promise<boolean> =>
+    writeText: (text: string): Promise<void> => 
       ipcRenderer.invoke('clipboard:writeText', text),
-    readText: (): Promise<string> =>
-      ipcRenderer.invoke('clipboard:readText'),
+    readText: (): Promise<string> => 
+      ipcRenderer.invoke('clipboard:readText')
   },
-
+  
+  // Secure clipboard with TTL
   secureClipboard: {
     writeText: (text: string, opts?: { ttlMs?: number }): Promise<boolean> =>
       ipcRenderer.invoke('secureClipboard:write', text, opts?.ttlMs),
