@@ -298,20 +298,36 @@ export class DatabaseManager {
 
   private async persist(): Promise<void> {
     try {
-      // Ensure directory exists
+      // Ensure target directory exists
       await fs.mkdir(path.dirname(this.dbPath), { recursive: true });
-      
+
       const dataObject = {
         messages: Object.fromEntries(this.data.messages),
         chats: Object.fromEntries(this.data.chats),
-        version: '1.0.0', // Add version for future migrations
+        version: '1.0.0',
         lastUpdated: Date.now()
       };
-      
-      // Write to temporary file first, then rename for atomic operation
-      const tempPath = `${this.dbPath}.tmp`;
-      await fs.writeFile(tempPath, JSON.stringify(dataObject, null, 2));
-      await fs.rename(tempPath, this.dbPath);
+      const json = JSON.stringify(dataObject, null, 2);
+
+      // Unique temp file to avoid rename races on Windows
+      const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const tempPath = `${this.dbPath}.${unique}.tmp`;
+
+      await fs.writeFile(tempPath, json);
+
+      try {
+        // Try atomic rename
+        await fs.rename(tempPath, this.dbPath);
+      } catch (err: any) {
+        // Fallback for ENOENT/EACCES/EPERM cases
+        if (err?.code === 'ENOENT' || err?.code === 'EACCES' || err?.code === 'EPERM') {
+          await fs.writeFile(this.dbPath, json);
+        } else {
+          throw err;
+        }
+      } finally {
+        try { await fs.unlink(tempPath); } catch {}
+      }
     } catch (error) {
       console.error('Failed to persist database:', error);
       throw error;

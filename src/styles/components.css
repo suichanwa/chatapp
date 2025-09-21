@@ -1,34 +1,72 @@
 /* Make sure these styles are at the top and not overridden */
+/* Modal base: hidden and non-interactive by default */
 .modal {
+  display: none;           /* hidden by default */
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 10000; /* Very high z-index */
-  display: none; /* Hidden by default */
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  background: rgba(0, 0, 0, 0.8); /* Fallback background */
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;    /* cannot intercept clicks unless opened */
 }
 
 .modal.show {
-  display: flex !important; /* Force display */
-  opacity: 1 !important; /* Force opacity */
-  align-items: center;
-  justify-content: center;
+  display: block;
+  pointer-events: auto;
 }
 
-.modal-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(8px);
-  z-index: 10000; /* lower than modal-content */
+/* Backdrop only clickable when open */
+.modal .modal-overlay {
+  pointer-events: none;
 }
+.modal.show .modal-overlay {
+  pointer-events: auto;
+}
+
+/* Content only interactive when open */
+.modal .modal-container,
+.modal .modal-content {
+  pointer-events: none;
+}
+.modal.show .modal-container,
+.modal.show .modal-content {
+  pointer-events: auto;
+}
+
+/* Overlay: only catch clicks when open */
+.modal .modal-overlay {
+  opacity: 0;
+  transition: opacity 220ms ease;
+  pointer-events: none;    /* important: don't block UI when closed */
+}
+
+.modal.show .modal-overlay {
+  opacity: 1;
+  pointer-events: auto;    /* clickable backdrop only when modal is open */
+}
+
+/* Content: interactive only when open */
+.modal .modal-content {
+  transform: translateY(10px) scale(0.96);
+  opacity: 0;
+  pointer-events: none;    /* prevent ghost blocking */
+}
+
+.modal.show .modal-content {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 220ms ease;
+  pointer-events: auto;
+}
+
+/* Explicit keyframed variants used by Modal.open/close */
+.modal-overlay.animate-in { animation: modalOverlayIn 220ms ease both }
+.modal-overlay.animate-out { animation: modalOverlayOut 200ms ease both }
+.modal-content.animate-in { animation: modalContentIn 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both }
+.modal-content.animate-out { animation: modalContentOut 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both }
+
+@keyframes modalOverlayIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes modalOverlayOut { from { opacity: 1 } to { opacity: 0 } }
+@keyframes modalContentIn { from { transform: translateY(12px) scale(0.96); opacity: 0 } to { transform: translateY(0) scale(1); opacity: 1 } }
+@keyframes modalContentOut { from { transform: translateY(0) scale(1); opacity: 1 } to { transform: translateY(12px) scale(0.97); opacity: 0 } }
 
 .modal-container {
   position: relative;

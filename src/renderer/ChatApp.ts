@@ -7,8 +7,11 @@ import type { Component } from './types/components';
 import type { Message, Chat, PeerInfo } from '../types/index';
 import type { ChatAppPublic } from './types/public';
 import { SavedMessagesManager } from './components/Chat/SavedMessagesManager';
-import { renderTimestamp } from './components/UI/MessageTimestamp';
 import { NetworkManager } from './components/Network/NetworkManager';
+import { ShortcutsModal } from './components/UI/ShortcutsModal';
+import { MessageList } from './components/Chat/MessageList';
+import { ShortcutsController } from './components/UI/ShortcutsController';
+import { ErrorModal } from './components/UI/ErrorModal';
 
 export class ChatApp implements Component {
   private eventBus = EventBus.getInstance();
@@ -23,28 +26,29 @@ export class ChatApp implements Component {
 
   // Modal components
   protected newChatModal: NewChatModal | null = null;
+  protected shortcutsModal: ShortcutsModal | null = null;
 
   // Image helpers
   private imageProcessor = new ImageProcessor();
   private imageViewer = new ImageViewer();
 
+  // Extracted views/controllers
+  private messageList = new MessageList({ imageViewer: this.imageViewer });
+
   // Typing indicators
   private typingTimers: Map<string, number> = new Map();
   private lastTypingSentAt = 0;
 
-  // Privacy mode: allow revealing one at a time (timestamps only)
-  private privacyMode = true; // kept for future use
-  private revealedMessageId: string | null = null;
-  private revealTimer: number | null = null;
-
   // Keep recent incoming signatures per chat for 2s
   private recentIncoming: Map<string, Map<string, number>> = new Map();
+
+  // Error modal
+  private errorModal = new ErrorModal();
 
   constructor() {
     // Register components
     this.components.set('debug', new DebugPanel());
     this.components.set('savedMessages', new SavedMessagesManager());
-    // NetworkManager owns transport listeners; no auto-start to avoid double server start
     this.components.set('network', new NetworkManager({ autoStart: false }));
 
     this.newChatModal = new NewChatModal({
@@ -52,6 +56,13 @@ export class ChatApp implements Component {
       onStartServer: this.handleModalStartServer.bind(this),
     });
     this.components.set('newChatModal', this.newChatModal);
+
+    this.shortcutsModal = new ShortcutsModal();
+    this.components.set('shortcutsModal', this.shortcutsModal);
+
+    // Register extracted components
+    this.components.set('messageList', this.messageList);
+    this.components.set('shortcutsController', new ShortcutsController(this));
   }
 
   async initialize(): Promise<void> {
@@ -63,7 +74,7 @@ export class ChatApp implements Component {
     }
 
     await this.imageProcessor.initialize();
-    await this.imageViewer.initialize();
+    // imageViewer is initialized by MessageList
 
     this.setupEventListeners();
     await this.loadExistingChats();
@@ -105,7 +116,7 @@ export class ChatApp implements Component {
       this.refreshChatList();
     });
 
-    // IMPORTANT: Handle incoming messages only via EventBus (from NetworkManager)
+    // Handle incoming messages only via EventBus (from NetworkManager)
     this.eventBus.on('message:received', ({ chatId, data }: { chatId: string; data: Record<string, unknown> }) => {
       this.handleIncomingMessage(chatId, data);
     });
@@ -138,6 +149,7 @@ export class ChatApp implements Component {
           <h1>🔒 Secure Chat</h1>
           <div class="app-status-container">
             <span id="app-status" class="app-status">🔄 Starting...</span>
+            <button id="shortcuts-btn" class="shortcuts-btn" title="Keyboard Shortcuts (Ctrl+Shift+/)">⌨️</button>
           </div>
         </header>
         
@@ -195,6 +207,7 @@ export class ChatApp implements Component {
     const newChatBtn = document.getElementById('new-chat-btn');
     const savedBtn = document.getElementById('saved-messages-btn');
     const copyAddressBtn = document.getElementById('copy-address-btn') as HTMLButtonElement | null;
+    const shortcutsBtn = document.getElementById('shortcuts-btn') as HTMLButtonElement | null;
 
     sendBtn?.addEventListener('click', () => this.sendMessage());
     messageInput?.addEventListener('keydown', (e) => {
@@ -205,6 +218,9 @@ export class ChatApp implements Component {
     });
     newChatBtn?.addEventListener('click', () => this.showNewChatModal());
     savedBtn?.addEventListener('click', () => this.openSavedMessages());
+
+    // Shortcuts button
+    shortcutsBtn?.addEventListener('click', () => this.openShortcuts());
 
     // Image select
     const imageBtn = document.getElementById('image-btn') as HTMLButtonElement | null;
@@ -219,87 +235,6 @@ export class ChatApp implements Component {
         } catch (err) {
           console.error('Failed to send image:', err);
           alert(`Failed to send image: ${err instanceof Error ? err.message : 'Unknown error'}`);
-        }
-      }
-    });
-
-    // NEW: Ctrl+T to focus the text input
-    document.addEventListener('keydown', (e) => {
-      if (e.ctrlKey && (e.key === 't' || e.key === 'T')) {
-        if (!this.currentChatId) return;           // need a selected chat
-        if (!messageInput || messageInput.disabled) return;
-        e.preventDefault();
-        e.stopPropagation();
-        messageInput.focus();
-        // place caret at end
-        const len = messageInput.value.length;
-        messageInput.selectionStart = messageInput.selectionEnd = len;
-      }
-    });
-
-    // NEW: Ctrl+O to open image picker (already present)
-    document.addEventListener('keydown', (e) => {
-      if (e.ctrlKey && (e.key === 'o' || e.key === 'O')) {
-        if (!this.currentChatId) return;
-        if (imageBtn?.disabled) return;
-        e.preventDefault();
-        e.stopPropagation();
-        imageInput?.click();
-      }
-    });
-
-    // NEW: Ctrl+Shift+C to copy message text
-    document.addEventListener('keydown', async (e) => {
-      if (e.ctrlKey && e.shiftKey && (e.key === 'c' || e.key === 'C')) {
-        if (!this.currentChatId) return;
-        e.preventDefault();
-        e.stopPropagation();
-        // Prefer the currently revealed message; otherwise copy the last message in the chat
-        let targetMessageId: string | null = this.revealedMessageId;
-        if (!targetMessageId) {
-          const all = await window.electronAPI.db.getMessages(this.currentChatId);
-          const last = all[all.length - 1];
-          targetMessageId = last?.id || null;
-        }
-        if (targetMessageId) await this.copyMessage(targetMessageId);
-      }
-    });
-
-    // NEW: Ctrl+N to open New Chat
-    document.addEventListener('keydown', (e) => {
-      if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'n' || e.key === 'N')) {
-        e.preventDefault();
-        e.stopPropagation();
-        this.showNewChatModal();
-      }
-    });
-
-    // Copy my address button
-    copyAddressBtn?.addEventListener('click', async () => {
-      const addr = this.getMyAddressString();
-      if (!addr) return;
-      await this.copyText(addr);
-      const serverStatus = document.getElementById('server-status');
-      if (serverStatus) {
-        const prev = serverStatus.textContent;
-        serverStatus.textContent = 'Address copied';
-        setTimeout(() => { if (serverStatus.textContent === 'Address copied') serverStatus.textContent = prev || ''; }, 1000);
-      }
-    });
-
-    // NEW: Ctrl+Shift+A to copy my address
-    document.addEventListener('keydown', async (e) => {
-      if (e.ctrlKey && e.shiftKey && (e.key === 'a' || e.key === 'A')) {
-        const addr = this.getMyAddressString();
-        if (!addr) return;
-        e.preventDefault();
-        e.stopPropagation();
-        await this.copyText(addr);
-        const serverStatus = document.getElementById('server-status');
-        if (serverStatus) {
-          const prev = serverStatus.textContent;
-          serverStatus.textContent = 'Address copied';
-          setTimeout(() => { if (serverStatus.textContent === 'Address copied') serverStatus.textContent = prev || ''; }, 1000);
         }
       }
     });
@@ -323,11 +258,134 @@ export class ChatApp implements Component {
       this.transport()?.sendSignal?.(this.currentChatId, { action: 'stop_typing' });
     });
 
+    // Copy my address button
+    copyAddressBtn?.addEventListener('click', async () => {
+      const addr = this.getMyAddressString();
+      if (!addr) return;
+      await this.copyText(addr);
+      const serverStatus = document.getElementById('server-status');
+      if (serverStatus) {
+        const prev = serverStatus.textContent;
+        serverStatus.textContent = 'Address copied';
+        setTimeout(() => { if (serverStatus.textContent === 'Address copied') serverStatus.textContent = prev || ''; }, 1000);
+      }
+    });
+
     // Privacy: hide revealed message on Esc or when window loses focus
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') this.hideRevealedMessage();
+      if (e.key === 'Escape') this.messageList.hideRevealedMessage();
     });
-    window.addEventListener('blur', () => this.hideRevealedMessage());
+    window.addEventListener('blur', () => this.messageList.hideRevealedMessage());
+  }
+
+  // Delegate to MessageList to render messages
+  protected async refreshMessages(): Promise<void> {
+    if (!this.currentChatId) return;
+    await this.messageList.refresh(this.currentChatId);
+  }
+
+  // Public helpers used by ShortcutsController
+  public getRevealedMessageId(): string | null {
+    return this.messageList.getRevealedMessageId();
+  }
+
+  public openShortcuts(): void {
+    this.shortcutsModal?.open();
+  }
+
+  protected async selectChat(chatId: string): Promise<void> {
+    this.currentChatId = chatId;
+    this.refreshChatList();
+    this.updateChatHeader();
+    await this.refreshMessages();
+
+    const input = document.getElementById('message-input') as HTMLInputElement | null;
+    const send = document.getElementById('send-btn') as HTMLButtonElement | null;
+    const imageBtn = document.getElementById('image-btn') as HTMLButtonElement | null;
+    if (input) input.disabled = false;
+    if (send) send.disabled = false;
+    if (imageBtn) imageBtn.disabled = false;
+  }
+
+  private async handleIncomingMessage(chatId: string, data: unknown): Promise<void> {
+    try {
+      const payload = (data ?? {}) as Record<string, unknown>;
+      const content =
+        typeof payload.content === 'string'
+          ? payload.content
+          : typeof payload.message === 'string'
+            ? payload.message
+            : String(data);
+      const type = (typeof payload.type === 'string' ? payload.type : 'text') as Message['type'];
+
+      const img = (payload.imageData as any)?.data as string | undefined;
+      const sig = ['peer', type, (payload as any).encrypted ? '1' : '0', content, img ? img.slice(0, 64) : ''].join('|');
+      if (this.isDuplicateIncoming(chatId, sig)) return;
+
+      const message: Omit<Message, 'id' | 'timestamp'> = {
+        chatId,
+        content,
+        sender: 'peer',
+        encrypted: Boolean((payload as any).encrypted),
+        type,
+        imageData: payload.imageData as Message['imageData']
+      };
+
+      await window.electronAPI.db.saveMessage(message);
+
+      if (this.currentChatId === chatId) await this.refreshMessages();
+      this.refreshChatList();
+    } catch (error) {
+      console.error('Failed to handle incoming message:', error);
+    }
+  }
+
+  public async copyMessage(messageId: string): Promise<void> {
+    try {
+      if (!this.currentChatId) return;
+      const messages = await window.electronAPI.db.getMessages(this.currentChatId);
+      const msg = messages.find(m => m.id === messageId);
+      if (!msg) return;
+
+      // Decide what to copy
+      let text = (msg.content ?? '').trim();
+      if (!text) {
+        if (msg.type === 'image' && msg.imageData) {
+          text = `📷 ${msg.imageData.filename}`;
+        } else {
+          text = '';
+        }
+      }
+
+      // Prefer navigator.clipboard, fallback to execCommand
+      const write = async (t: string) => {
+        try {
+          await navigator.clipboard.writeText(t);
+        } catch {
+          const ta = document.createElement('textarea');
+          ta.value = t;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+      };
+
+      await write(text);
+
+      // Optional UX hint in chat status
+      const chatStatus = document.getElementById('chat-status');
+      if (chatStatus) {
+        const prev = chatStatus.textContent;
+        chatStatus.textContent = 'Copied';
+        setTimeout(() => { if (chatStatus.textContent === 'Copied') chatStatus.textContent = prev || ''; }, 1000);
+      }
+    } catch (err) {
+      console.error('Failed to copy message:', err);
+      alert('Failed to copy');
+    }
   }
 
   protected showNewChatModal(): void {
@@ -337,12 +395,9 @@ export class ChatApp implements Component {
       if (this.serverInfo) {
         this.newChatModal.updateServerInfo(this.serverInfo.address, this.serverInfo.port);
       }
-    } else {
-      this.createSimpleFallbackModal();
     }
   }
 
-  // Modal callbacks
   private async handleModalStartServer(): Promise<void> {
     if (!window.electronAPI?.transport) throw new Error('Transport API not available');
     const info = await window.electronAPI.transport.startServer();
@@ -367,12 +422,40 @@ export class ChatApp implements Component {
       throw new Error('Invalid address format. Use IP:PORT');
     }
 
-    const ok = await window.electronAPI.transport.connect(host, portNum);
-    if (!ok) throw new Error('Failed to connect to peer');
-    // onPeerConnected will create the chat
+    const res = await window.electronAPI.transport.connect(host, portNum);
+
+    // Backward compatible: handle both boolean and structured result
+    if (typeof res === 'boolean') {
+      if (!res) throw new Error('Failed to connect to peer');
+      return;
+    }
+
+    if (!res.ok) {
+      const msg = this.mapConnectError(res.reason);
+      // Use the error modal
+      this.errorModal.show(msg);
+      throw new Error(msg);
+    }
   }
 
-  // Networking hooks
+  private mapConnectError(reason?: string): string {
+    switch (reason) {
+      case 'occupied':
+      case 'already_connected':
+        return 'The line is already busy.';
+      case 'unauthorized':
+        return 'Connection rejected: invalid PSK.';
+      case 'rate_limited':
+        return 'The server is busy. Please try again in a moment.';
+      case 'bad_handshake':
+        return 'Protocol mismatch or malformed handshake.';
+      case 'timeout':
+        return 'Connection timed out.';
+      default:
+        return 'Network error. Please try again.';
+    }
+  }
+
   private updateServerStatus(): void {
     const serverStatus = document.getElementById('server-status');
     const myAddress = document.getElementById('my-address');
@@ -383,13 +466,6 @@ export class ChatApp implements Component {
       myAddress.textContent = this.serverInfo
         ? `Address: ${this.serverInfo.address}:${this.serverInfo.port}`
         : 'Address: Unknown';
-    }
-    // Enable/disable copy address button based on availability
-    const copyBtn = document.getElementById('copy-address-btn') as HTMLButtonElement | null;
-    if (copyBtn) {
-      const available = !!this.serverInfo;
-      copyBtn.disabled = !available;
-      copyBtn.title = available ? 'Copy my address (Ctrl+Shift+A)' : 'Start server to get an address';
     }
   }
 
@@ -406,11 +482,14 @@ export class ChatApp implements Component {
     try {
       const savedChat = await window.electronAPI.db.saveChat(chat);
       this.chats.set(chatId, { ...savedChat, id: chatId });
-      this.refreshChatList();
-      this.selectChat(chatId);
     } catch (error) {
       console.error('Failed to save new chat:', error);
+      // Fallback: create in‑memory chat so the session can proceed
+      this.chats.set(chatId, { ...chat, id: chatId });
     }
+
+    this.refreshChatList();
+    this.selectChat(chatId);
   }
 
   private handlePeerDisconnected(chatId: string): void {
@@ -419,65 +498,6 @@ export class ChatApp implements Component {
       chat.isOnline = false;
       this.refreshChatList();
       if (this.currentChatId === chatId) this.updateChatHeader();
-    }
-  }
-
-  private isDuplicateIncoming(chatId: string, sig: string, ttlMs = 2000): boolean {
-    const now = Date.now();
-    let map = this.recentIncoming.get(chatId);
-    if (!map) {
-      map = new Map();
-      this.recentIncoming.set(chatId, map);
-    }
-    // purge expired
-    for (const [k, ts] of map) {
-      if (now - ts > ttlMs) map.delete(k);
-    }
-    if (map.has(sig)) return true;
-    map.set(sig, now);
-    return false;
-  }
-
-  private async handleIncomingMessage(chatId: string, data: unknown): Promise<void> {
-    try {
-      const payload = (data ?? {}) as Record<string, unknown>;
-      const content =
-        typeof payload.content === 'string'
-          ? payload.content
-          : typeof payload.message === 'string'
-            ? payload.message
-            : String(data);
-      const type = (typeof payload.type === 'string' ? payload.type : 'text') as Message['type'];
-
-      // Build a compact signature for dedupe (sender is always 'peer' here)
-      const img = (payload.imageData as any)?.data as string | undefined;
-      const sig = [
-        'peer',
-        type,
-        payload.encrypted ? '1' : '0',
-        content,
-        img ? img.slice(0, 64) : ''
-      ].join('|');
-
-      if (this.isDuplicateIncoming(chatId, sig)) {
-        return; // drop duplicate burst
-      }
-
-      const message: Omit<Message, 'id' | 'timestamp'> = {
-        chatId,
-        content,
-        sender: 'peer',
-        encrypted: Boolean(payload.encrypted),
-        type,
-        imageData: payload.imageData as Message['imageData']
-      };
-
-      await window.electronAPI.db.saveMessage(message);
-
-      if (this.currentChatId === chatId) await this.refreshMessages();
-      this.refreshChatList();
-    } catch (error) {
-      console.error('Failed to handle incoming message:', error);
     }
   }
 
@@ -491,13 +511,13 @@ export class ChatApp implements Component {
       chatStatus.classList.add('typing');
       const prev = this.typingTimers.get(chatId);
       if (prev) window.clearTimeout(prev);
-      const t = window.setTimeout(() => {
+      const timer = window.setTimeout(() => {
         if (chatStatus.textContent === 'Peer is typing…') {
           chatStatus.textContent = '';
           chatStatus.classList.remove('typing');
         }
       }, 3000);
-      this.typingTimers.set(chatId, t);
+      this.typingTimers.set(chatId, timer);
     } else if (data.action === 'stop_typing') {
       chatStatus.textContent = '';
       chatStatus.classList.remove('typing');
@@ -559,231 +579,6 @@ export class ChatApp implements Component {
     });
   }
 
-  // Escape user content to prevent HTML injection
-  private escapeHtml(text: string): string {
-    const map: Record<string, string> = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;',
-    };
-    return String(text).replace(/[&<>"']/g, (ch) => map[ch]);
-  }
-
-  protected async refreshMessages(): Promise<void> {
-    const messagesEl = document.getElementById('messages');
-    if (!messagesEl || !this.currentChatId) {
-      if (messagesEl) {
-        messagesEl.innerHTML = `
-          <div class="welcome-message">
-            <h3>🔒 Welcome to Secure Chat</h3>
-            <p>Your messages are end-to-end encrypted using RSA + AES encryption.</p>
-            <p>Click "New Chat" to connect to a peer or start your first conversation.</p>
-          </div>
-        `;
-      }
-      return;
-    }
-
-    try {
-      const messages = await window.electronAPI.db.getMessages(this.currentChatId);
-
-      if (messages.length === 0) {
-        messagesEl.innerHTML = '<div class="no-messages">No messages yet. Start the conversation!</div>';
-        return;
-      }
-
-      messagesEl.innerHTML = messages.map(message => {
-        const timestampHtml = renderTimestamp(message.timestamp);
-        const timestampBlock = `
-          <div class="message-time-wrapper">
-            ${timestampHtml}
-            <span class="timestamp-hint">shoot time</span>
-          </div>
-        `;
-
-        // NEW: copy button (always shown)
-        const copyBtn = `<button class="copy-message-btn" onclick="window.chatApp.copyMessage('${message.id}')" title="Copy Text (Ctrl+Shift+C)">📋</button>`;
-
-        const footer = `
-          <div class="message-footer">
-            ${timestampBlock}
-            ${copyBtn}
-            ${message.sender !== 'me' && this.chats.get(this.currentChatId!)?.type !== 'saved'
-              ? `<button class="save-message-btn" onclick="window.chatApp.saveMessage('${message.id}')" title="Save Message">💾</button>`
-              : ''}
-          </div>
-        `;
-
-        // Always hide timestamp for both parties (except system messages)
-        const isSensitive = message.type !== 'system';
-        const sensitiveClass = isSensitive ? 'sensitive' : '';
-
-        if (message.type === 'image' && message.imageData) {
-          const safeCaption = this.escapeHtml(message.content);
-          const safeAlt = this.escapeHtml(message.imageData.filename);
-          return `
-            <div class="message ${message.sender === 'me' ? 'sent' : 'received'} ${sensitiveClass}" data-mid="${message.id}">
-              <div class="image-message">
-                <img src="${message.imageData.data}" alt="${safeAlt}" class="message-image">
-                <div class="image-caption">${safeCaption}</div>
-              </div>
-              ${footer}
-            </div>
-          `;
-        }
-
-        const safeText = this.escapeHtml(message.content);
-        return `
-          <div class="message ${message.sender === 'me' ? 'sent' : 'received'} ${sensitiveClass}" data-mid="${message.id}">
-            <div class="message-content">${safeText}</div>
-            ${footer}
-          </div>
-        `;
-      }).join('');
-
-      // Image viewer handlers
-      const imgs = messagesEl.querySelectorAll<HTMLImageElement>('.message-image');
-      imgs.forEach(img => {
-        const caption = (img.closest('.image-message')?.querySelector('.image-caption') as HTMLElement | null)?.textContent || '';
-        img.addEventListener('click', (ev) => {
-          ev.preventDefault();
-          const container = img.closest('.message');
-          if (container && container.classList.contains('sensitive') && !container.classList.contains('revealed')) {
-            this.revealMessage(container.getAttribute('data-mid') || '');
-            return;
-          }
-          this.openImageWithFallback(img, caption);
-        });
-      });
-
-      // Privacy handlers: reveal/hide
-      this.attachPrivacyHandlers(messagesEl);
-
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-
-      // Send read receipt with last message timestamp
-      const last = messages[messages.length - 1];
-      if (last) {
-        this.transport()?.sendSignal?.(this.currentChatId, {
-          action: 'read',
-          lastSeenTs: last.timestamp
-        });
-      }
-    } catch (error) {
-      console.error('Failed to render messages:', error);
-    }
-  }
-
-  private attachPrivacyHandlers(messagesEl: HTMLElement): void {
-    if (!this.privacyMode) return;
-
-    messagesEl.querySelectorAll<HTMLElement>('.message.sensitive').forEach(el => {
-      el.addEventListener('click', (e) => {
-        const target = e.target as HTMLElement;
-        if (target.closest('button')) return;
-        const id = el.getAttribute('data-mid') || '';
-        if (!id) return;
-        this.revealMessage(id);
-      }, { passive: true });
-    });
-
-    const outsideClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest('.message.revealed')) this.hideRevealedMessage();
-    };
-    messagesEl.removeEventListener('click', outsideClick as any);
-    messagesEl.addEventListener('click', outsideClick);
-  }
-
-  private revealMessage(messageId: string): void {
-    if (!messageId) return;
-
-    if (this.revealedMessageId && this.revealedMessageId !== messageId) {
-      const prev = document.querySelector<HTMLElement>(`.message[data-mid="${this.revealedMessageId}"]`);
-      prev?.classList.remove('revealed');
-    }
-
-    const curr = document.querySelector<HTMLElement>(`.message[data-mid="${messageId}"]`);
-    if (!curr) return;
-    curr.classList.add('revealed');
-    this.revealedMessageId = messageId;
-
-    if (this.revealTimer) window.clearTimeout(this.revealTimer);
-    this.revealTimer = window.setTimeout(() => this.hideRevealedMessage(), 10_000);
-  }
-
-  private hideRevealedMessage(): void {
-    if (!this.revealedMessageId) return;
-    const el = document.querySelector<HTMLElement>(`.message[data-mid="${this.revealedMessageId}"]`);
-    el?.classList.remove('revealed');
-    this.revealedMessageId = null;
-    if (this.revealTimer) {
-      window.clearTimeout(this.revealTimer);
-      this.revealTimer = null;
-    }
-  }
-
-  // Prefer ImageViewer; if it doesn't actually show, fall back to inline expanded image
-  private openImageWithFallback(img: HTMLImageElement, caption: string): void {
-    try {
-      this.imageViewer.open(img.src, img.alt || 'Image', caption);
-    } catch {
-      // ignore error here; we'll fallback below
-    }
-    setTimeout(() => {
-      if (!this.isViewerShowing(img.src)) {
-        this.toggleInlineLightbox(img);
-      }
-    }, 50);
-  }
-
-  private isViewerShowing(expectedSrc?: string): boolean {
-    const overlay = document.getElementById('image-viewer') as HTMLDivElement | null;
-    if (!overlay) return false;
-
-    const display = overlay.style.display || getComputedStyle(overlay).display;
-    if (display === 'none') return false;
-
-    if (expectedSrc) {
-      const img = overlay.querySelector('img') as HTMLImageElement | null;
-      if (!img) return false;
-      const actual = img.getAttribute('src') || '';
-      if (!(actual === expectedSrc || actual.startsWith(expectedSrc.slice(0, 32)))) return false;
-    }
-    return true;
-  }
-
-  private toggleInlineLightbox(img: HTMLImageElement): void {
-    const expanded = img.classList.toggle('expanded');
-    document.body.classList.toggle('lightbox-open', expanded);
-    if (expanded) {
-      const onKey = (evt: KeyboardEvent) => {
-        if (evt.key === 'Escape') {
-          img.classList.remove('expanded');
-          document.body.classList.remove('lightbox-open');
-          document.removeEventListener('keydown', onKey);
-        }
-      };
-      document.addEventListener('keydown', onKey, { once: true });
-    }
-  }
-
-  protected async selectChat(chatId: string): Promise<void> {
-    this.currentChatId = chatId;
-    this.refreshChatList();
-    this.updateChatHeader();
-    await this.refreshMessages();
-
-    const input = document.getElementById('message-input') as HTMLInputElement | null;
-    const send = document.getElementById('send-btn') as HTMLButtonElement | null;
-    const imageBtn = document.getElementById('image-btn') as HTMLButtonElement | null;
-    if (input) input.disabled = false;
-    if (send) send.disabled = false;
-    if (imageBtn) imageBtn.disabled = false;
-  }
-
   private updateChatHeader(): void {
     const chatTitle = document.getElementById('chat-title');
     const chatStatus = document.getElementById('chat-status');
@@ -806,7 +601,7 @@ export class ChatApp implements Component {
     }
   }
 
-  private async sendMessage(): Promise<void> {
+  protected async sendMessage(): Promise<void> {
     const input = document.getElementById('message-input') as HTMLInputElement | null;
     const messageText = input?.value.trim() || '';
     if (!messageText || !this.currentChatId) return;
@@ -822,7 +617,6 @@ export class ChatApp implements Component {
 
       const saved = await window.electronAPI.db.saveMessage(message);
 
-      // Skip transport for Saved Messages chat
       const isSavedChat = this.chats.get(this.currentChatId)?.type === 'saved';
       if (!isSavedChat) {
         if (window.electronAPI.transport) {
@@ -846,7 +640,7 @@ export class ChatApp implements Component {
     }
   }
 
-  private async sendImageMessage(imageFile: File): Promise<void> {
+  protected async sendImageMessage(imageFile: File): Promise<void> {
     if (!this.currentChatId) return;
 
     const imageData = await this.imageProcessor.processImageFile(imageFile);
@@ -861,7 +655,6 @@ export class ChatApp implements Component {
     };
     const saved = await window.electronAPI.db.saveMessage(message);
 
-    // Skip transport for Saved Messages chat
     const isSavedChat = this.chats.get(this.currentChatId)?.type === 'saved';
     if (!isSavedChat) {
       if (window.electronAPI.transport) {
@@ -878,15 +671,14 @@ export class ChatApp implements Component {
     this.refreshChatList();
   }
 
-  // Open or create the Saved Messages chat and select it
-  private async openSavedMessages(): Promise<void> {
+  protected async openSavedMessages(): Promise<void> {
     try {
       // Try local cache first
       let savedChat = Array.from(this.chats.values()).find(c => c.type === 'saved');
       if (!savedChat) {
         // Ensure in DB
         const existing = await window.electronAPI.db.getChats();
-        savedChat = existing.find(c => (c as any).type === 'saved');
+        savedChat = existing.find(c => c.type === 'saved');
         if (!savedChat) {
           const created = await window.electronAPI.db.saveChat({
             name: '💾 Saved Messages',
@@ -905,7 +697,6 @@ export class ChatApp implements Component {
     }
   }
 
-  // Expose method for saving messages (called from HTML)
   public async saveMessage(messageId: string): Promise<void> {
     try {
       if (!this.currentChatId) return;
@@ -917,55 +708,6 @@ export class ChatApp implements Component {
     }
   }
 
-  // NEW: Copy message text helper
-  public async copyMessage(messageId: string): Promise<void> {
-    try {
-      if (!this.currentChatId) return;
-      const messages = await window.electronAPI.db.getMessages(this.currentChatId);
-      const msg = messages.find(m => m.id === messageId);
-      if (!msg) return;
-
-      // Decide what to copy
-      let text = (msg.content ?? '').trim();
-      if (!text) {
-        if (msg.type === 'image' && msg.imageData) {
-          text = `📷 ${msg.imageData.filename}`;
-        } else {
-          text = '';
-        }
-      }
-
-      // Prefer navigator.clipboard, fallback to execCommand
-      const write = async (t: string) => {
-        try {
-          await navigator.clipboard.writeText(t);
-        } catch {
-          const ta = document.createElement('textarea');
-          ta.value = t;
-          ta.style.position = 'fixed';
-          ta.style.opacity = '0';
-          document.body.appendChild(ta);
-          ta.select();
-          document.execCommand('copy');
-          document.body.removeChild(ta);
-        }
-      };
-
-      await write(text);
-
-      // Optional UX hint in chat status
-      const chatStatus = document.getElementById('chat-status');
-      if (chatStatus) {
-        const prev = chatStatus.textContent;
-        chatStatus.textContent = 'Copied';
-        setTimeout(() => { if (chatStatus.textContent === 'Copied') chatStatus.textContent = prev || ''; }, 1000);
-      }
-    } catch (err) {
-      console.error('Failed to copy message:', err);
-      alert('Failed to copy');
-    }
-  }
-
   cleanup(): void {
     for (const [, component] of this.components) {
       if (component.cleanup) component.cleanup();
@@ -974,15 +716,29 @@ export class ChatApp implements Component {
     this.currentChatId = null;
     this.serverInfo = null;
 
-    // Clear typing timers
-    for (const [, timer] of this.typingTimers) {
-      window.clearTimeout(timer);
-    }
+    for (const [, timer] of this.typingTimers) window.clearTimeout(timer);
     this.typingTimers.clear();
 
-    // Clear privacy state
-    this.hideRevealedMessage();
+    // Clear privacy state via MessageList
+    this.messageList.hideRevealedMessage();
     this.recentIncoming.clear();
+  }
+
+  // De-dup incoming bursts
+  private isDuplicateIncoming(chatId: string, sig: string, ttlMs = 2000): boolean {
+    const now = Date.now();
+    let map = this.recentIncoming.get(chatId);
+    if (!map) {
+      map = new Map();
+      this.recentIncoming.set(chatId, map);
+    }
+    // purge expired
+    for (const [k, ts] of map) {
+      if (now - ts > ttlMs) map.delete(k);
+    }
+    if (map.has(sig)) return true;
+    map.set(sig, now);
+    return false;
   }
 
   // Helper: get "ip:port" from serverInfo or the rendered text
@@ -1020,13 +776,4 @@ declare global {
   interface Window {
     chatApp: ChatAppPublic;
   }
-}
-
-if (typeof window !== 'undefined') {
-  (window as any).chatApp = new ChatApp();
-  (window as any).chatApp.initialize().catch((err: unknown) => {
-    console.error('Failed to initialize ChatApp:', err);
-    const status = document.getElementById('app-status');
-    if (status) status.textContent = '❌ Error initializing app';
-  });
 }

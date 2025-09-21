@@ -14,6 +14,61 @@ export class ImageProcessor implements Component {
     console.log('🖼️ ImageProcessor: Initialized');
   }
 
+  // Re-encode any incoming image data URL to strip EXIF/GPS/metadata
+  async sanitizeIncomingImage(
+    rawDataUrl: string,
+    filename = 'image.jpg',
+    opts: { maxWidth?: number; maxHeight?: number; mimeType?: 'image/jpeg' | 'image/png'; quality?: number } = {}
+  ): Promise<ImageData> {
+    const mimeType = opts.mimeType ?? 'image/jpeg';
+    const quality = typeof opts.quality === 'number' ? opts.quality : 0.85;
+    const maxWidth = opts.maxWidth ?? 1600;
+    const maxHeight = opts.maxHeight ?? 1200;
+
+    return new Promise<ImageData>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          // Main re-encode (drops all metadata)
+          const { width, height } = this.calculateDimensions(img.width, img.height, maxWidth, maxHeight);
+          this.canvas.width = width;
+          this.canvas.height = height;
+          this.ctx.drawImage(img, 0, 0, width, height);
+          const data = this.canvas.toDataURL(mimeType, quality);
+
+          // Thumbnail
+          const thumbDims = this.calculateDimensions(width, height, 150, 100);
+          this.canvas.width = thumbDims.width;
+          this.canvas.height = thumbDims.height;
+          this.ctx.drawImage(img, 0, 0, thumbDims.width, thumbDims.height);
+          const thumbnail = this.canvas.toDataURL(mimeType, 0.6);
+
+          resolve({
+            filename: this.sanitizeFileName(filename, mimeType),
+            mimeType,
+            size: this.calculateBase64Size(data),
+            width,
+            height,
+            data,
+            thumbnail,
+          });
+        } catch (e) {
+          reject(e);
+        }
+      };
+      img.onerror = () => reject(new Error('Failed to load incoming image'));
+      img.src = rawDataUrl;
+    });
+  }
+
+  // Ensure neutral filenames and correct extension for re-encoded images
+  private sanitizeFileName(name: string, mimeType: string): string {
+    const ext = mimeType.includes('png') ? 'png' : 'jpg';
+    const base = name.split('/').pop()?.split('\\').pop() || 'image';
+    const cleanBase = base.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9._-]/g, '').slice(0, 32) || 'image';
+    return `${cleanBase}.${ext}`;
+  }
+
   async processImageFile(file: File): Promise<ImageData> {
     return new Promise((resolve, reject) => {
       if (!file.type.startsWith('image/')) {
@@ -26,54 +81,53 @@ export class ImageProcessor implements Component {
         try {
           const base64Data = e.target?.result as string;
           const img = new Image();
-          
+
           img.onload = async () => {
             try {
-              // Resize image if too large
+              // Resize and re-encode (drops all metadata)
               const maxWidth = 800;
               const maxHeight = 600;
               const { width, height } = this.calculateDimensions(img.width, img.height, maxWidth, maxHeight);
-              
-              // Create resized image
+
               this.canvas.width = width;
               this.canvas.height = height;
               this.ctx.drawImage(img, 0, 0, width, height);
               const resizedData = this.canvas.toDataURL('image/jpeg', 0.8);
-              
-              // Create thumbnail
+
+              // Thumbnail
               const thumbWidth = 150;
               const thumbHeight = 100;
               const thumbDimensions = this.calculateDimensions(img.width, img.height, thumbWidth, thumbHeight);
-              
+
               this.canvas.width = thumbDimensions.width;
               this.canvas.height = thumbDimensions.height;
               this.ctx.drawImage(img, 0, 0, thumbDimensions.width, thumbDimensions.height);
               const thumbnailData = this.canvas.toDataURL('image/jpeg', 0.6);
-              
+
               const imageData: ImageData = {
-                filename: file.name,
-                mimeType: file.type,
+                filename: this.sanitizeFileName(file.name, 'image/jpeg'),
+                mimeType: 'image/jpeg',
                 size: this.calculateBase64Size(resizedData),
                 width,
                 height,
                 data: resizedData,
-                thumbnail: thumbnailData
+                thumbnail: thumbnailData,
               };
-              
+
               resolve(imageData);
             } catch (error) {
               reject(error);
             }
           };
-          
+
           img.onerror = () => reject(new Error('Failed to load image'));
           img.src = base64Data;
         } catch (error) {
           reject(error);
         }
       };
-      
-      reader.onerror = () => reject(new Error('Failed to read file'));
+
+      reader.onerror = () => reject(new Error('Failed to read image file'));
       reader.readAsDataURL(file);
     });
   }

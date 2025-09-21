@@ -67,30 +67,24 @@ const electronAPI: ElectronAPI = {
 
   // Transport layer
   transport: {
-    startServer: (port?: number): Promise<{ port: number; address: string }> =>
-      ipcRenderer.invoke('transport:startServer', port),
-    connect: (address: string, port: number): Promise<boolean> => 
-      ipcRenderer.invoke('transport:connect', address, port),
-    send: (chatId: string, data: unknown): Promise<boolean> => 
-      ipcRenderer.invoke('transport:send', chatId, data),
+    startServer: (port?: number) => ipcRenderer.invoke('transport:startServer', port),
+    // Now returns { ok: boolean, reason?: string }
+    connect: (address: string, port: number) => ipcRenderer.invoke('transport:connect', address, port),
+    send: (chatId: string, data: unknown) => ipcRenderer.invoke('transport:send', chatId, data),
+    disconnect: (chatId: string) => ipcRenderer.invoke('transport:disconnect', chatId),
     onMessage: (cb: (chatId: string, data: any) => void) => {
       ipcRenderer.on('transport:message', (_e, chatId, data) => cb(chatId, data));
     },
-
-    // ADD: peer connection events so ChatApp.setupEventListeners works
     onPeerConnected: (cb: (chatId: string, peerInfo: any) => void) => {
       ipcRenderer.on('transport:peerConnected', (_e, chatId, peerInfo) => cb(chatId, peerInfo));
     },
     onPeerDisconnected: (cb: (chatId: string) => void) => {
       ipcRenderer.on('transport:peerDisconnected', (_e, chatId) => cb(chatId));
     },
-
-    // Signals (typing/read)
-    sendSignal: (chatId: string, data: { action: 'typing' | 'stop_typing' | 'read'; lastSeenTs?: number }): Promise<boolean> =>
-      ipcRenderer.invoke('transport:signal', chatId, data),
-    onSignal: (cb: (chatId: string, data: any) => void) => {
-      ipcRenderer.on('transport:signal', (_e, chatId, data) => cb(chatId, data));
-    },
+    // NEW
+    setPublicMode: (enabled: boolean) => ipcRenderer.invoke('transport:setPublicMode', enabled),
+    setPSK: (psk: string | null) => ipcRenderer.invoke('transport:setPSK', psk),
+    allowOnly: (address: string | null) => ipcRenderer.invoke('transport:allowOnly', address),
   },
 
   clipboard: {

@@ -92,6 +92,8 @@ export interface ElectronAPI {
     onMessage: (callback: (chatId: string, data: unknown) => void) => void;
     onPeerConnected: (callback: (chatId: string, peerInfo: PeerInfo) => void) => void;
     onPeerDisconnected: (callback: (chatId: string) => void) => void;
+    setPSK: (psk: string | null) => Promise<boolean>;
+    allowOnly: (address: string | null) => Promise<boolean>;
   };
   // Add image processing APIs
   image: {

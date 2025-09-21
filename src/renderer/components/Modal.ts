@@ -1,9 +1,14 @@
 import type { Component } from '../types/components';
 
+// Define proper function types instead of generic Function
+type EventListener = (...args: unknown[]) => void;
+type ContentUpdateCallback = () => void;
+
 export class Modal implements Component {
   private _modal: HTMLElement | null = null;
   private isOpen = false;
-  private eventListeners: Map<string, Function[]> = new Map();
+  private eventListeners: Map<string, EventListener[]> = new Map();
+  private contentUpdateCallback?: ContentUpdateCallback;
 
   // Public getter for external access
   public get modal(): HTMLElement | null {
@@ -103,17 +108,22 @@ export class Modal implements Component {
   }
 
   // Event system for external listeners
-  on(event: string, callback: Function): void {
+  on(event: string, callback: EventListener): void {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, []);
     }
-    this.eventListeners.get(event)!.push(callback);
+    const listeners = this.eventListeners.get(event);
+    if (listeners) {
+      listeners.push(callback);
+    }
   }
 
-  off(event: string, callback?: Function): void {
+  off(event: string, callback?: EventListener): void {
     if (!this.eventListeners.has(event)) return;
     
-    const listeners = this.eventListeners.get(event)!;
+    const listeners = this.eventListeners.get(event);
+    if (!listeners) return;
+    
     if (callback) {
       const index = listeners.indexOf(callback);
       if (index > -1) {
@@ -124,7 +134,7 @@ export class Modal implements Component {
     }
   }
 
-  private emit(event: string, ...args: any[]): void {
+  private emit(event: string, ...args: unknown[]): void {
     const listeners = this.eventListeners.get(event);
     if (listeners) {
       listeners.forEach(listener => {
@@ -144,33 +154,47 @@ export class Modal implements Component {
     }
   }
 
+  // Animation duration (ms)
+  private static ANIM_MS = 220;
+
   open(): void {
     if (!this._modal) {
       console.error('Cannot open modal: modal not initialized');
       return;
     }
-    
     if (this.isOpen) {
       console.warn('Modal is already open');
       return;
     }
 
-    this._modal.classList.add('show');
+    // Show and animate
+    this._modal.classList.add('show', 'modal-animating');
     this.isOpen = true;
-    
-    // Focus management
-    const firstFocusable = this._modal.querySelector('input, button, textarea, select, [tabindex]:not([tabindex="-1"])') as HTMLElement;
-    if (firstFocusable) {
-      // Small delay to ensure modal is visible
-      setTimeout(() => firstFocusable.focus(), 100);
-    }
-    
+
+    const overlay = this._modal.querySelector('.modal-overlay') as HTMLElement | null;
+    const content = this._modal.querySelector('.modal-content') as HTMLElement | null;
+
+    overlay?.classList.add('animate-in');
+    content?.classList.add('animate-in');
+
+    // Focus management after visible
+    const firstFocusable = this._modal.querySelector(
+      'input, button, textarea, select, [tabindex]:not([tabindex="-1"])'
+    ) as HTMLElement | null;
+    if (firstFocusable) setTimeout(() => firstFocusable.focus(), 100);
+
     // Prevent body scroll
     document.body.style.overflow = 'hidden';
-    
+
+    // Remove animation classes when done
+    window.setTimeout(() => {
+      overlay?.classList.remove('animate-in');
+      content?.classList.remove('animate-in');
+      this._modal?.classList.remove('modal-animating');
+    }, Modal.ANIM_MS);
+
     // Emit events
     this.emit('opened');
-    
     console.log(`Modal "${this.id}" opened`);
   }
 
@@ -179,26 +203,36 @@ export class Modal implements Component {
       console.error('Cannot close modal: modal not initialized');
       return;
     }
-    
     if (!this.isOpen) {
       console.warn('Modal is already closed');
       return;
     }
-    
-    this._modal.classList.remove('show');
-    this.isOpen = false;
-    
-    // Restore body scroll
-    document.body.style.overflow = '';
-    
-    // Return focus to trigger element if available
-    const triggerElement = document.querySelector('[data-modal-trigger="' + this.id + '"]') as HTMLElement;
-    triggerElement?.focus();
-    
-    // Emit events
-    this.emit('closed');
-    
-    console.log(`Modal "${this.id}" closed`);
+
+    const overlay = this._modal.querySelector('.modal-overlay') as HTMLElement | null;
+    const content = this._modal.querySelector('.modal-content') as HTMLElement | null;
+
+    // Play closing animation
+    this._modal.classList.add('modal-animating');
+    overlay?.classList.add('animate-out');
+    content?.classList.add('animate-out');
+
+    // Complete close after animation
+    window.setTimeout(() => {
+      overlay?.classList.remove('animate-out');
+      content?.classList.remove('animate-out');
+      this._modal?.classList.remove('show', 'modal-animating');
+
+      this.isOpen = false;
+      document.body.style.overflow = '';
+
+      const triggerElement = document.querySelector(
+        '[data-modal-trigger="' + this.id + '"]'
+      ) as HTMLElement | null;
+      triggerElement?.focus();
+
+      this.emit('closed');
+      console.log(`Modal "${this.id}" closed`);
+    }, Modal.ANIM_MS);
   }
 
   toggle(): void {
@@ -207,6 +241,11 @@ export class Modal implements Component {
     } else {
       this.open();
     }
+  }
+
+  // Set a callback to be called after content is updated
+  setContentUpdateCallback(callback: ContentUpdateCallback): void {
+    this.contentUpdateCallback = callback;
   }
 
   setContent(content: string): void {
@@ -219,6 +258,18 @@ export class Modal implements Component {
     if (body) {
       body.innerHTML = content;
       console.log(`Modal "${this.id}" content updated`);
+      
+      // Emit content update event for external listeners
+      this.emit('content-updated');
+      
+      // Call registered callback if any (for NewChatModal to rebind handlers)
+      if (this.contentUpdateCallback) {
+        setTimeout(() => {
+          if (this.contentUpdateCallback) {
+            this.contentUpdateCallback();
+          }
+        }, 0);
+      }
     }
   }
 
@@ -273,6 +324,9 @@ export class Modal implements Component {
     
     // Clear all event listeners
     this.eventListeners.clear();
+    
+    // Reset callback
+    this.contentUpdateCallback = undefined;
     
     // Remove modal from DOM
     if (this._modal) {

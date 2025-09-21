@@ -24,9 +24,9 @@ export class WindowManager {
         preload: this.getPreloadPath(),
         nodeIntegration: false,
         contextIsolation: true,
+        sandbox: true,                // enable sandbox
         webSecurity: true,
         allowRunningInsecureContent: false,
-        sandbox: false, // Required for preload script to work properly
         experimentalFeatures: false
       },
       icon: this.getIconPath(),
@@ -197,7 +197,13 @@ export class WindowManager {
 
     // Security: Prevent new window creation
     this.mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-      console.log('🖼️ WindowManager: Blocked new window creation for:', url);
+      // Allow only https, block everything else
+      try {
+        const u = new URL(url);
+        if (u.protocol === 'https:') {
+          return { action: 'allow' };
+        }
+      } catch {}
       return { action: 'deny' };
     });
 

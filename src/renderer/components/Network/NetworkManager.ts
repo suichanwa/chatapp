@@ -113,22 +113,28 @@ export class NetworkManager implements Component {
   }
 
   async connectToPeer(address: string, port: number): Promise<boolean> {
-    if (!window.electronAPI?.transport) {
-      throw new Error('Transport API not available');
-    }
-
+    if (!window.electronAPI?.transport) throw new Error('Transport API not available');
     try {
       console.log(`Connecting to ${address}:${port}...`);
-      const connected = await window.electronAPI.transport.connect(address, port);
-      
-      if (connected) {
-        console.log('Successfully connected to peer');
+      const res = await window.electronAPI.transport.connect(address, port);
+      if (typeof res === 'boolean') return res;
+      if (!res.ok) {
+        const reason = res.reason as string | undefined;
+        const msg = reason === 'occupied' || reason === 'already_connected'
+          ? 'The line is already busy.'
+          : reason === 'unauthorized'
+          ? 'Connection rejected: invalid PSK.'
+          : reason === 'rate_limited'
+          ? 'The server is busy. Please try again in a moment.'
+          : reason === 'timeout'
+          ? 'Connection timed out.'
+          : 'Network error. Please try again.';
+        throw new Error(msg);
       }
-      
-      return connected;
-    } catch (error) {
-      console.error('Connection error:', error);
-      throw error;
+      return true;
+    } catch (err) {
+      console.error('Connection error:', err);
+      throw err;
     }
   }
 
