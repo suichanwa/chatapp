@@ -1,482 +1,371 @@
+/* Enhanced Components with Tailwind v4 */
+@import "tailwindcss";
+
 /* Make sure these styles are at the top and not overridden */
 /* Modal base: hidden and non-interactive by default */
 .modal {
-  display: none;           /* hidden by default */
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
-  pointer-events: none;    /* cannot intercept clicks unless opened */
+  @apply hidden fixed inset-0 z-[10000] pointer-events-none;
 }
 
 .modal.show {
-  display: block;
-  pointer-events: auto;
+  @apply block pointer-events-auto;
 }
 
 /* Backdrop only clickable when open */
 .modal .modal-overlay {
-  pointer-events: none;
+  @apply pointer-events-none;
 }
 .modal.show .modal-overlay {
-  pointer-events: auto;
+  @apply pointer-events-auto;
 }
 
 /* Content only interactive when open */
 .modal .modal-container,
 .modal .modal-content {
-  pointer-events: none;
+  @apply pointer-events-none;
 }
 .modal.show .modal-container,
 .modal.show .modal-content {
-  pointer-events: auto;
+  @apply pointer-events-auto;
 }
 
 /* Overlay: only catch clicks when open */
 .modal .modal-overlay {
-  opacity: 0;
-  transition: opacity 220ms ease;
-  pointer-events: none;    /* important: don't block UI when closed */
+  @apply opacity-0 pointer-events-none transition-opacity duration-200;
 }
 
 .modal.show .modal-overlay {
-  opacity: 1;
-  pointer-events: auto;    /* clickable backdrop only when modal is open */
+  @apply opacity-100 pointer-events-auto;
 }
 
 /* Content: interactive only when open */
 .modal .modal-content {
+  @apply opacity-0 pointer-events-none transition-all duration-200;
   transform: translateY(10px) scale(0.96);
-  opacity: 0;
-  pointer-events: none;    /* prevent ghost blocking */
 }
 
 .modal.show .modal-content {
+  @apply opacity-100 pointer-events-auto;
   transform: translateY(0) scale(1);
-  opacity: 1;
   transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 220ms ease;
-  pointer-events: auto;
 }
 
 /* Explicit keyframed variants used by Modal.open/close */
-.modal-overlay.animate-in { animation: modalOverlayIn 220ms ease both }
-.modal-overlay.animate-out { animation: modalOverlayOut 200ms ease both }
-.modal-content.animate-in { animation: modalContentIn 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both }
-.modal-content.animate-out { animation: modalContentOut 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both }
+.modal-overlay.animate-in { 
+  animation: modalOverlayIn 220ms ease both; 
+}
+.modal-overlay.animate-out { 
+  animation: modalOverlayOut 200ms ease both; 
+}
+.modal-content.animate-in { 
+  animation: modalContentIn 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both; 
+}
+.modal-content.animate-out { 
+  animation: modalContentOut 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both; 
+}
 
-@keyframes modalOverlayIn { from { opacity: 0 } to { opacity: 1 } }
-@keyframes modalOverlayOut { from { opacity: 1 } to { opacity: 0 } }
-@keyframes modalContentIn { from { transform: translateY(12px) scale(0.96); opacity: 0 } to { transform: translateY(0) scale(1); opacity: 1 } }
-@keyframes modalContentOut { from { transform: translateY(0) scale(1); opacity: 1 } to { transform: translateY(12px) scale(0.97); opacity: 0 } }
+@keyframes modalOverlayIn { 
+  from { opacity: 0; } 
+  to { opacity: 1; } 
+}
+@keyframes modalOverlayOut { 
+  from { opacity: 1; } 
+  to { opacity: 0; } 
+}
+@keyframes modalContentIn { 
+  from { 
+    transform: translateY(12px) scale(0.96); 
+    opacity: 0; 
+  } 
+  to { 
+    transform: translateY(0) scale(1); 
+    opacity: 1; 
+  } 
+}
+@keyframes modalContentOut { 
+  from { 
+    transform: translateY(0) scale(1); 
+    opacity: 1; 
+  } 
+  to { 
+    transform: translateY(12px) scale(0.97); 
+    opacity: 0; 
+  } 
+}
 
 .modal-container {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  padding: 2rem;
-  z-index: 10001;
+  @apply relative flex items-center justify-center w-full h-full p-8 z-[10001];
 }
 
 .modal-content {
-  background: #2d2d2d;
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  width: 100%;
-  max-width: 600px;
-  max-height: 90vh;
-  overflow: hidden;
-  transform: scale(0.9);
-  transition: transform 0.3s ease;
-  z-index: 10002;
+  @apply bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden;
+  @apply transform scale-95 transition-transform duration-300 z-[10002];
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
 .modal.show .modal-content {
-  transform: scale(1);
+  @apply scale-100;
 }
 
 .modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1.5rem;
-  border-bottom: 1px solid #404040;
-  background: #353535;
+  @apply flex items-center justify-between p-6 border-b border-gray-700;
+  background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
 }
 
 .modal-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #fff;
-  margin: 0;
+  @apply text-xl font-semibold text-white m-0 flex items-center gap-3;
+}
+
+.modal-title .material-icons {
+  @apply text-2xl text-blue-400;
 }
 
 .modal-close {
-  background: none;
-  border: none;
-  color: #888;
-  cursor: pointer;
-  padding: 0.5rem;
-  border-radius: 6px;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  @apply bg-transparent border-none text-gray-400 cursor-pointer p-2 rounded-lg;
+  @apply transition-all duration-200 flex items-center justify-center w-10 h-10;
+  @apply hover:bg-gray-700 hover:text-white focus:ring-2 focus:ring-gray-500;
 }
 
-.modal-close:hover {
-  background: #404040;
-  color: #fff;
+.modal-close .material-icons {
+  @apply text-lg;
 }
 
 .modal-body {
-  padding: 0;
-  overflow-y: auto;
+  @apply p-0 overflow-y-auto pointer-events-auto;
   max-height: calc(90vh - 80px);
-  pointer-events: auto;
 }
 
-/* Tab System */
+/* Tab System Enhanced */
 .tab-system {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
+  @apply flex flex-col h-full;
 }
 
 .tab-nav {
-  display: flex;
-  background: #1a1a1a;
-  border-bottom: 1px solid #404040;
+  @apply flex bg-gray-900 border-b border-gray-700;
 }
 
 .tab-button {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 1rem;
-  background: none;
-  border: none;
-  color: #888;
-  cursor: pointer;
-  transition: all 0.2s;
-  border-bottom: 3px solid transparent;
-  font-size: 0.9rem;
-  font-weight: 500;
-}
-
-.tab-button:hover:not(.active) {
-  background: #2a2a2a;
-  color: #ccc;
+  @apply flex-1 flex items-center justify-center gap-2 p-4 bg-transparent border-none;
+  @apply text-gray-400 cursor-pointer transition-all duration-300 font-medium relative;
+  @apply hover:bg-gray-800 hover:text-gray-300 border-b-4 border-transparent text-sm;
 }
 
 .tab-button.active {
-  color: #fff;
-  background: #2d2d2d;
-  border-bottom-color: #007acc;
+  @apply text-white bg-gray-800 border-b-blue-500;
 }
 
 .tab-icon {
-  font-size: 1.1rem;
+  @apply text-lg;
 }
 
 .tab-content {
-  flex: 1;
-  position: relative;
-  display: none;
+  @apply flex-1 relative hidden;
 }
 
 .tab-content.active {
-  display: block;
+  @apply block;
 }
 
 .tab-panel {
-  display: none;
-  height: 100%;
-  padding: 2rem;
+  @apply hidden h-full p-8;
 }
 
 .tab-panel.active {
-  display: block;
+  @apply block;
 }
 
-/* Connection Form */
+/* Connection Form Enhanced */
 .connection-form {
-  max-width: 500px;
-  margin: 0 auto;
+  @apply max-w-lg mx-auto;
 }
 
 .form-header {
-  text-align: center;
-  margin-bottom: 2rem;
+  @apply text-center mb-8;
 }
 
 .form-icon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
+  @apply text-5xl mb-4 text-blue-400;
 }
 
 .form-header h4 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #fff;
-  margin: 0 0 0.5rem 0;
+  @apply text-2xl font-bold text-white m-0 mb-2;
 }
 
 .form-description {
-  color: #888;
-  font-size: 0.9rem;
-  margin: 0;
+  @apply text-gray-300 text-base m-0 leading-relaxed;
 }
 
 .form-content {
-  margin-bottom: 2rem;
+  @apply mb-8 space-y-6;
 }
 
 .form-group {
-  margin-bottom: 1.5rem;
+  @apply mb-6 space-y-2;
 }
 
 .form-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-  font-weight: 500;
-  color: #ccc;
-  font-size: 0.9rem;
+  @apply flex items-center gap-2 mb-3 font-medium text-gray-200 text-sm;
 }
 
 .label-icon {
-  font-size: 1rem;
+  @apply text-base text-blue-400;
 }
 
 .input-group {
-  position: relative;
+  @apply relative;
 }
 
 .form-input {
-  width: 100%;
-  padding: 0.875rem 1rem;
-  border: 2px solid #404040;
-  border-radius: 8px;
-  background: #1a1a1a;
-  color: #fff;
-  font-size: 0.9rem;
-  transition: all 0.2s;
-  outline: none;
-}
-
-.form-input:focus {
-  border-color: #007acc;
-  box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
-}
-
-.form-input::placeholder {
-  color: #666;
+  @apply w-full py-3 px-4 border-2 border-gray-600 rounded-lg bg-gray-800 text-white text-sm;
+  @apply transition-all duration-300 outline-none placeholder:text-gray-500;
+  @apply focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:bg-gray-750;
 }
 
 .form-input.error {
-  border-color: #ff4444;
-  box-shadow: 0 0 0 3px rgba(255, 68, 68, 0.1);
+  @apply border-red-500;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
 }
 
 .input-hint {
-  margin-top: 0.5rem;
-  font-size: 0.8rem;
-  color: #666;
+  @apply mt-2 text-xs text-gray-400 leading-relaxed;
 }
 
 .connection-status {
-  padding: 1rem;
-  background: #1a1a1a;
-  border-radius: 8px;
-  border: 1px solid #333;
+  @apply p-4 bg-gray-800 rounded-lg border border-gray-700;
 }
 
 .status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  @apply flex items-center gap-3;
 }
 
 .status-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  position: relative;
+  @apply w-3 h-3 rounded-full relative;
 }
 
 .status-dot.offline {
-  background: #666;
+  @apply bg-gray-500;
 }
 
 .status-dot.connecting {
-  background: #ffcc00;
-  animation: pulse 1.5s infinite;
+  @apply bg-yellow-500 animate-pulse;
 }
 
-.status-dot.connected {
-  background: #28a745;
-}
-
+.status-dot.connected,
 .status-dot.online {
-  background: #28a745;
+  @apply bg-green-500;
 }
 
 .status-dot.error {
-  background: #ff4444;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  @apply bg-red-500;
 }
 
 .status-text {
-  font-size: 0.9rem;
-  color: #ccc;
-  font-weight: 500;
+  @apply text-sm text-gray-300 font-medium;
 }
 
 .form-actions {
-  text-align: center;
+  @apply text-center space-y-4;
 }
 
-/* Buttons */
+/* Enhanced Buttons */
 .btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.875rem 1.5rem;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  text-decoration: none;
-  position: relative;
-  overflow: hidden;
-  outline: none;
-}
-
-.btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
+  @apply inline-flex items-center justify-center gap-3 py-3 px-6 border-none rounded-lg;
+  @apply text-sm font-semibold cursor-pointer transition-all duration-300 outline-none relative;
+  @apply focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 overflow-hidden;
+  @apply disabled:cursor-not-allowed disabled:opacity-60;
 }
 
 .btn-primary {
+  @apply text-white shadow-lg transform hover:-translate-y-0.5 active:translate-y-0;
+  @apply focus:ring-blue-500 disabled:transform-none disabled:shadow-none;
   background: linear-gradient(135deg, #007acc 0%, #0066aa 100%);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(0, 122, 204, 0.3);
+  box-shadow: 0 4px 15px rgba(0, 122, 204, 0.4);
 }
 
 .btn-primary:hover:not(:disabled) {
   background: linear-gradient(135deg, #0066aa 0%, #005588 100%);
-  box-shadow: 0 6px 16px rgba(0, 122, 204, 0.4);
-  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 122, 204, 0.5);
 }
 
 .btn-primary:active {
-  transform: translateY(0);
+  @apply translate-y-0;
   box-shadow: 0 2px 8px rgba(0, 122, 204, 0.3);
 }
 
 .btn-secondary {
-  background: #666;
-  color: #fff;
-  border: 1px solid #777;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #777;
-  border-color: #888;
+  @apply bg-gray-700 text-white border border-gray-600 shadow-md;
+  @apply hover:bg-gray-600 hover:border-gray-500 hover:-translate-y-0.5;
+  @apply active:translate-y-0 focus:ring-gray-500;
 }
 
 .btn-success {
+  @apply text-white shadow-lg transform hover:-translate-y-0.5 active:translate-y-0;
+  @apply focus:ring-green-500;
   background: linear-gradient(135deg, #28a745 0%, #218838 100%);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+  box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
 }
 
 .btn-success:hover:not(:disabled) {
   background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
-  box-shadow: 0 6px 16px rgba(40, 167, 69, 0.4);
-  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(40, 167, 69, 0.5);
 }
 
 .btn-small {
-  padding: 0.5rem 0.875rem;
-  font-size: 0.8rem;
-  min-width: 44px;
-  min-height: 44px;
+  @apply py-2 px-3 text-xs min-w-[44px] min-h-[44px];
 }
 
 .btn-icon {
-  font-size: 1rem;
-  flex-shrink: 0;
+  @apply text-lg flex-shrink-0;
 }
 
 .btn-text {
-  flex-shrink: 0;
+  @apply flex-shrink-0 font-medium;
 }
 
-/* Loading States */
+/* Loading States Enhanced */
 .btn.loading {
-  pointer-events: none;
-  opacity: 0.8;
+  @apply pointer-events-none opacity-80;
 }
 
 .btn.loading .btn-icon {
-  animation: spin 1s linear infinite;
+  @apply animate-spin;
 }
 
-/* Copy Button States */
+/* Copy Button States Enhanced */
 .btn-secondary.success {
-  background: #28a745 !important;
-  border-color: #28a745 !important;
-  color: #fff !important;
+  @apply bg-green-500 border-green-400 text-white shadow-lg;
+  box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
 }
 
 .btn-secondary.error {
-  background: #dc3545 !important;
-  border-color: #dc3545 !important;
-  color: #fff !important;
+  @apply bg-red-500 border-red-400 text-white shadow-lg;
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
 }
 
-/* Error Message */
+/* Error Message Enhanced */
 .error-message {
+  @apply text-white p-4 rounded-lg mb-4 text-sm border shadow-lg;
+  @apply flex items-center gap-3 border-red-400/30;
   background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-  color: white;
-  padding: 0.875rem 1rem;
-  border-radius: 8px;
-  margin: 0 0 1rem 0;
-  font-size: 0.9rem;
-  border: 1px solid rgba(220, 53, 69, 0.3);
-  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.2);
+  box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3);
   animation: slideIn 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
 }
 
 .error-message::before {
-  content: '⚠️';
-  font-size: 1rem;
-  flex-shrink: 0;
+  @apply text-lg flex-shrink-0;
+  content: 'warning';
+  font-family: 'Material Icons';
 }
 
-/* Animations */
+/* Enhanced Animations */
 @keyframes pulse {
   0%, 100% { 
     opacity: 1; 
+    transform: scale(1);
   }
   50% { 
-    opacity: 0.5; 
+    opacity: 0.8; 
+    transform: scale(1.02);
   }
 }
 
@@ -492,70 +381,96 @@
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from { 
+    transform: rotate(0deg); 
+  }
+  to { 
+    transform: rotate(360deg); 
+  }
 }
 
-/* Responsive Design for NewChatModal */
-@media (max-width: 640px) {
+@keyframes fadeIn {
+  from { 
+    opacity: 0; 
+    transform: translateY(5px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+/* Responsive Design Enhanced */
+@media (max-width: 768px) {
   .tab-section {
-    padding: 1.5rem;
+    @apply p-4;
   }
   
   .modal-tabs {
-    border-radius: 0;
+    @apply rounded-none;
   }
   
-  .modal-tab {
-    padding: 0.875rem 1rem;
-    font-size: 0.8rem;
+  .modal-tab,
+  .tab-button {
+    @apply py-3 px-4 text-xs;
   }
   
   .tab-label {
-    display: none;
+    @apply hidden;
   }
   
   .info-value {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
+    @apply flex-col items-start gap-2;
   }
   
   .key-container {
-    flex-direction: column;
+    @apply flex-col;
   }
   
   .address-display {
-    font-size: 0.8rem;
+    @apply text-sm;
   }
   
   .btn {
-    width: 100%;
-    justify-content: center;
+    @apply w-full justify-center;
   }
   
   .btn-small {
-    width: auto;
-    min-width: 44px;
+    @apply w-auto min-w-[44px];
+  }
+
+  .modal-container {
+    @apply p-4;
+  }
+
+  .modal-content {
+    @apply max-w-full;
   }
 }
 
 @media (max-width: 480px) {
   .section-title {
-    font-size: 1.1rem;
+    @apply text-lg;
   }
   
   .form-input {
-    padding: 0.75rem;
+    @apply py-3 px-3;
   }
   
   .key-display {
-    min-height: 100px;
-    font-size: 0.7rem;
+    @apply min-h-[100px] text-xs;
+  }
+
+  .modal-header {
+    @apply p-4;
+  }
+
+  .modal-title {
+    @apply text-lg;
   }
 }
 
-/* Stable, non-jumping scrollbars (no width change on hover) */
+/* Enhanced Scrollbars with Tailwind */
 .messages,
 #chat-list,
 .modal-body,
@@ -567,13 +482,11 @@
 .key-textarea,
 textarea {
   scrollbar-gutter: stable both-edges;
-
-  /* Firefox: keep width thin always; thumb is transparent by default */
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
 }
 
-/* Firefox: reveal thumb on hover without changing width */
+/* Reveal scrollbar on hover */
 .messages:hover,
 #chat-list:hover,
 .modal-body:hover,
@@ -582,12 +495,12 @@ textarea {
 .debug-logs:hover,
 .key-display:hover,
 .address-display:hover,
-key-textarea:hover,
+.key-textarea:hover,
 textarea:hover {
   scrollbar-color: rgba(255,255,255,0.3) transparent;
 }
 
-/* WebKit/Blink: keep width constant; thumb is transparent by default */
+/* WebKit scrollbar styling */
 .messages::-webkit-scrollbar,
 #chat-list::-webkit-scrollbar,
 .modal-body::-webkit-scrollbar,
@@ -596,10 +509,9 @@ textarea:hover {
 .debug-logs::-webkit-scrollbar,
 .key-display::-webkit-scrollbar,
 .address-display::-webkit-scrollbar,
-key-textarea::-webkit-scrollbar,
+.key-textarea::-webkit-scrollbar,
 textarea::-webkit-scrollbar {
-  width: 8px;   /* was 0 */
-  height: 8px;  /* was 0 */
+  @apply w-2 h-2;
 }
 
 .messages::-webkit-scrollbar-track,
@@ -610,9 +522,9 @@ textarea::-webkit-scrollbar {
 .debug-logs::-webkit-scrollbar-track,
 .key-display::-webkit-scrollbar-track,
 .address-display::-webkit-scrollbar-track,
-key-textarea::-webkit-scrollbar-track,
+.key-textarea::-webkit-scrollbar-track,
 textarea::-webkit-scrollbar-track {
-  background: transparent;
+  @apply bg-transparent;
 }
 
 .messages::-webkit-scrollbar-thumb,
@@ -623,13 +535,12 @@ textarea::-webkit-scrollbar-track {
 .debug-logs::-webkit-scrollbar-thumb,
 .key-display::-webkit-scrollbar-thumb,
 .address-display::-webkit-scrollbar-thumb,
-key-textarea::-webkit-scrollbar-thumb,
+.key-textarea::-webkit-scrollbar-thumb,
 textarea::-webkit-scrollbar-thumb {
-  background: transparent; /* invisible by default */
-  border-radius: 8px;
+  @apply bg-transparent rounded-lg;
 }
 
-/* WebKit/Blink: only change thumb opacity on hover (no width change) */
+/* Show scrollbar thumb on hover */
 .messages:hover::-webkit-scrollbar-thumb,
 #chat-list:hover::-webkit-scrollbar-thumb,
 .modal-body:hover::-webkit-scrollbar-thumb,
@@ -638,18 +549,44 @@ textarea::-webkit-scrollbar-thumb {
 .debug-logs:hover::-webkit-scrollbar-thumb,
 .key-display:hover::-webkit-scrollbar-thumb,
 .address-display:hover::-webkit-scrollbar-thumb,
-key-textarea:hover::-webkit-scrollbar-thumb,
+.key-textarea:hover::-webkit-scrollbar-thumb,
 textarea:hover::-webkit-scrollbar-thumb {
   background: rgba(255,255,255,0.25);
 }
 
-/* --- Hotfix: ensure New Chat modal tabs are clickable --- */
-/* If an overlay element exists, keep it behind the content */
-.modal-overlay {
-  z-index: 10000; /* lower than modal-content */
+/* Connection Tabs Enhanced (NewChatModal compatibility) */
+.connection-tabs {
+  @apply flex bg-gray-900 border-b border-gray-700 rounded-t-xl overflow-hidden;
 }
 
-/* Raise modal interactive areas above any overlay and allow pointer events */
+.connection-tabs .tab-btn {
+  @apply flex-1 flex items-center justify-center gap-2 py-4 px-6 bg-transparent border-none;
+  @apply text-gray-400 cursor-pointer transition-all duration-300 font-medium relative;
+  @apply hover:bg-gray-800 hover:text-gray-300 text-sm font-semibold;
+}
+
+.connection-tabs .tab-btn.active {
+  @apply text-white bg-gray-800 shadow-inner;
+}
+
+.connection-tabs .tab-btn.active::after {
+  @apply content-[''] absolute bottom-0 left-0 right-0 h-1;
+  background: linear-gradient(135deg, #007acc 0%, #0066aa 100%);
+}
+
+/* Tab Content Toggle Enhanced */
+.tab-content { 
+  @apply hidden; 
+}
+.tab-content.active { 
+  @apply block; 
+}
+
+/* Modal Z-Index Management Enhanced */
+.modal-overlay {
+  @apply z-[10000];
+}
+
 .modal-content,
 .modal-header,
 .modal-body,
@@ -658,52 +595,102 @@ textarea:hover::-webkit-scrollbar-thumb {
 .tab-button,
 .modal-tab,
 .tab-btn {
-  position: relative;
-  z-index: 10003;
-  pointer-events: auto;
+  @apply relative z-[10003] pointer-events-auto;
 }
 
-/* Unify styles for .connection-tabs/.tab-btn (used by NewChatModal)
-   so they behave like .modal-tabs/.modal-tab */
-.connection-tabs {
-  display: flex;
-  background: #1a1a1a;
-  border-bottom: 1px solid #404040;
+/* High Contrast Support */
+@media (prefers-contrast: high) {
+  .modal-content {
+    @apply border-2 border-white;
+  }
+  
+  .tab-button.active,
+  .tab-btn.active {
+    @apply border-2 border-blue-500;
+  }
+  
+  .form-input:focus {
+    @apply border-4;
+  }
+  
+  .btn {
+    @apply border-2 border-current;
+  }
 }
 
-.connection-tabs .tab-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 1rem 1.5rem;
-  background: none;
-  border: none;
-  color: #888;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 0.9rem;
-  font-weight: 500;
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .tab-button,
+  .tab-btn,
+  .form-input,
+  .modal-content {
+    @apply transition-none;
+  }
+  
+  .btn.loading .btn-icon {
+    @apply animate-none;
+  }
+  
+  .status-dot.connecting {
+    @apply animate-none;
+  }
+  
+  .error-message {
+    animation: none;
+  }
+  
+  .modal .modal-content,
+  .modal .modal-overlay {
+    @apply transition-none;
+  }
 }
 
-.connection-tabs .tab-btn:hover:not(.active) {
-  background: #2a2a2a;
-  color: #ccc;
+/* Dark Mode Enhancements */
+@media (prefers-color-scheme: dark) {
+  .form-input {
+    @apply bg-gray-900 border-gray-500 text-gray-100;
+  }
+  
+  .form-input:focus {
+    @apply border-blue-400;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  }
+  
+  .modal-content {
+    @apply bg-gray-900;
+  }
+  
+  .modal-header {
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+  }
 }
 
-.connection-tabs .tab-btn.active {
-  color: #fff;
-  background: #2d2d2d;
-  border-bottom: 3px solid #007acc;
+/* Focus States Enhanced */
+.btn:focus-visible {
+  @apply outline-none ring-2 ring-offset-2 ring-offset-gray-800;
 }
 
-/* Make sure tab content toggles as expected even if other rules exist */
-.tab-content { display: none; }
-.tab-content.active { display: block; }
-
-/* Keep modal body scrollable and interactive */
-.modal-body {
-  pointer-events: auto;
+.form-input:focus-visible {
+  @apply outline-none;
 }
-/* --- end hotfix --- */
+
+.tab-button:focus-visible,
+.tab-btn:focus-visible {
+  @apply outline-none ring-2 ring-blue-500 ring-inset;
+}
+
+/* Print Styles */
+@media print {
+  .modal {
+    @apply hidden;
+  }
+  
+  .btn {
+    @apply border border-gray-400;
+  }
+  
+  .modal-content {
+    @apply shadow-none;
+  }
+}

@@ -20,10 +20,15 @@ export default defineConfig({
         'node:crypto', 
         'node:os',
         'net',
-        'child_process'
+        'child_process',
+        'tailwindcss', // External so main process doesn't try to bundle it
+        'autoprefixer'
       ]
     },
     outDir: '.vite/build',
-    emptyOutDir: false // Don't empty since preload.js will also be here
-  }
+    emptyOutDir: false, // Don't empty since preload.js will also be here
+    // Disable CSS processing for main process
+    cssCodeSplit: false,
+  },
+  // No CSS config for main process
 });

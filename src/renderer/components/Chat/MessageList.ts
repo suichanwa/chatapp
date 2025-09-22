@@ -25,205 +25,146 @@ export class MessageList implements Component {
     const style = document.createElement('style');
     style.id = 'message-list-styles';
     style.textContent = `
-      /* Message Actions Styling */
+      /* Message Actions Styling with Tailwind-like approach */
       .message-footer {
-        display: flex;
-        align-items: flex-end;
-        justify-content: space-between;
-        gap: 0.5rem;
-        margin-top: 0.5rem;
-        padding-top: 0.25rem;
+        @apply flex items-end justify-between gap-2 mt-2 pt-1;
       }
 
       .message-actions {
-        display: flex;
-        align-items: center;
-        gap: 0.25rem;
-        opacity: 0;
-        transition: opacity 0.2s ease;
+        @apply flex items-center gap-1 opacity-0 transition-opacity duration-200;
       }
 
       .message:hover .message-actions {
-        opacity: 1;
+        @apply opacity-100;
       }
 
-      /* Copy and Save Button Styling - Much smaller */
+      /* TINY Copy and Save Button Styling - Much smaller icons */
       .copy-message-btn,
       .save-message-btn {
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        color: #bbb;
-        padding: 0.15rem 0.3rem;
-        border-radius: 4px;
-        font-size: 0.65rem;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 20px;
-        min-width: 20px;
-        white-space: nowrap;
+        @apply inline-flex items-center justify-center;
+        @apply bg-white/[0.08] border border-white/[0.12] text-gray-400;
+        @apply px-1 py-0.5 rounded text-[0.65rem] font-medium cursor-pointer;
+        @apply transition-all duration-200 min-h-[18px] min-w-[18px] whitespace-nowrap;
+        @apply hover:transform hover:-translate-y-px;
       }
 
-      /* Material Icons in buttons - MUCH smaller */
+      /* CRITICAL: Material Icons in buttons - VERY TINY */
       .copy-message-btn .material-icons,
       .save-message-btn .material-icons {
-        font-size: 0.6rem !important; /* 9.6px - very small */
-        line-height: 1;
-        vertical-align: middle;
-        margin: 0;
-        padding: 0;
-        display: block;
-        width: 0.6rem;
-        height: 0.6rem;
+        font-size: 8px !important; /* 8px - ultra small */
+        line-height: 1 !important;
+        width: 8px !important;
+        height: 8px !important;
+        display: block !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        vertical-align: middle !important;
       }
 
       /* Copy button hover */
       .copy-message-btn:hover {
-        background: rgba(0, 122, 204, 0.15);
-        border-color: rgba(0, 122, 204, 0.3);
-        color: #58a6ff;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 6px rgba(0, 122, 204, 0.15);
+        @apply bg-blue-500/15 border-blue-500/30 text-blue-400;
+        @apply shadow-lg shadow-blue-500/15;
       }
 
       /* Save button styling - green theme */
       .save-message-btn {
-        background: rgba(40, 167, 69, 0.08);
-        border-color: rgba(40, 167, 69, 0.2);
-        color: #28a745;
+        @apply bg-green-500/[0.08] border-green-500/20 text-green-500;
       }
 
       .save-message-btn:hover {
-        background: rgba(40, 167, 69, 0.15);
-        border-color: rgba(40, 167, 69, 0.35);
-        color: #34ce57;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 6px rgba(40, 167, 69, 0.15);
+        @apply bg-green-500/15 border-green-500/35 text-green-400;
+        @apply shadow-lg shadow-green-500/15;
       }
 
       .save-message-btn:active,
       .copy-message-btn:active {
-        transform: translateY(0);
+        @apply translate-y-0;
       }
 
       /* Enhanced message time wrapper */
       .message-time-wrapper {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        line-height: 1.1;
-        font-size: 0.75rem;
-        color: var(--muted);
-        min-height: 1.6em;
-        position: relative;
+        @apply flex flex-col items-end leading-tight text-xs text-gray-500 min-h-[1.6em] relative;
       }
 
       /* Timestamp hint styling */
       .timestamp-hint {
-        position: absolute;
-        right: 0;
-        bottom: 0;
-        font-size: 0.65rem;
-        color: var(--muted);
-        opacity: 0;
-        letter-spacing: 0.02em;
-        text-transform: uppercase;
-        pointer-events: none;
-        transition: opacity 120ms ease;
+        @apply absolute right-0 bottom-0 text-[0.65rem] text-gray-500 opacity-0;
+        @apply tracking-wider uppercase pointer-events-none transition-opacity duration-150;
       }
 
       .message:not(.sensitive) .timestamp-hint { 
-        display: none; 
+        @apply hidden; 
       }
 
       .message.sensitive:not(.revealed) .timestamp-hint { 
-        opacity: 0.25; 
+        @apply opacity-25; 
       }
 
       .message.sensitive:not(.revealed):hover .timestamp-hint { 
-        opacity: 0.4; 
+        @apply opacity-40; 
       }
 
       .message.sensitive.revealed .timestamp-hint { 
-        opacity: 0; 
+        @apply opacity-0; 
       }
 
       /* System message enhanced styling */
       .message.system {
-        align-self: center;
-        max-width: 90%;
-        margin: 1.5rem auto;
+        @apply self-center max-w-[90%] mx-auto my-6;
       }
 
       .message.system .message-content {
+        @apply text-center text-sm py-5 px-6 rounded-xl leading-relaxed;
         background: linear-gradient(135deg, rgba(0, 122, 204, 0.08) 0%, rgba(0, 122, 204, 0.04) 100%);
         color: #ddd;
         border: 1px solid rgba(0, 122, 204, 0.15);
-        text-align: center;
-        font-size: 0.9rem;
-        padding: 1.25rem 1.5rem;
-        border-radius: 12px;
-        line-height: 1.5;
       }
 
       /* Forwarded message indicators - also smaller */
       .message.forwarded {
-        position: relative;
-        border-left: 3px solid #28a745;
-        padding-left: 0.75rem;
-        margin-left: 0.5rem;
+        @apply relative border-l-2 border-green-500 pl-3 ml-2;
       }
 
       .message.forwarded::before {
         content: 'reply';
         font-family: 'Material Icons';
-        position: absolute;
-        left: -6px;
-        top: 0.5rem;
-        font-size: 0.6rem; /* Much smaller */
-        color: #28a745;
+        @apply absolute -left-1.5 top-2 text-[8px] text-green-500;
+        @apply w-3 h-3 flex items-center justify-center rounded-full;
         background: var(--bg);
         padding: 1px;
-        border-radius: 50%;
-        width: 12px;
-        height: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+      }
+
+      /* No messages state */
+      .no-messages {
+        @apply text-center py-12 px-8 text-gray-400 italic;
       }
 
       /* Responsive adjustments */
       @media (max-width: 768px) {
         .message-actions {
-          opacity: 1; /* Always visible on mobile */
+          @apply opacity-100; /* Always visible on mobile */
         }
 
         .copy-message-btn,
         .save-message-btn {
-          padding: 0.1rem 0.25rem;
-          font-size: 0.6rem;
-          min-height: 18px;
-          min-width: 18px;
+          @apply px-0.5 py-0.5 text-[0.6rem] min-h-[16px] min-w-[16px];
         }
 
+        /* Even tinier on mobile */
         .copy-message-btn .material-icons,
         .save-message-btn .material-icons {
-          font-size: 0.5rem !important; /* Even smaller on mobile */
-          width: 0.5rem;
-          height: 0.5rem;
+          font-size: 6px !important; /* 6px - extremely small on mobile */
+          width: 6px !important;
+          height: 6px !important;
         }
 
         .message-footer {
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 0.25rem;
+          @apply flex-col items-start gap-1;
         }
 
         .message-actions {
-          align-self: flex-end;
+          @apply self-end;
         }
       }
 
@@ -231,11 +172,11 @@ export class MessageList implements Component {
       @media (prefers-contrast: high) {
         .copy-message-btn,
         .save-message-btn {
-          border-width: 2px;
+          @apply border-2;
         }
 
         .message.forwarded {
-          border-left-width: 4px;
+          @apply border-l-4;
         }
       }
 
@@ -243,17 +184,27 @@ export class MessageList implements Component {
       @media (prefers-reduced-motion: reduce) {
         .copy-message-btn,
         .save-message-btn {
-          transition: none;
+          @apply transition-none;
         }
 
         .copy-message-btn:hover,
         .save-message-btn:hover {
-          transform: none;
+          @apply transform-none;
         }
 
         .message-actions {
-          transition: none;
+          @apply transition-none;
         }
+      }
+
+      /* Image message lightbox styles */
+      .message-image.expanded {
+        @apply fixed inset-0 z-50 max-w-none max-h-none w-screen h-screen object-contain;
+        @apply bg-black/90 cursor-pointer;
+      }
+
+      body.lightbox-open {
+        @apply overflow-hidden;
       }
     `;
     document.head.appendChild(style);
@@ -343,8 +294,9 @@ export class MessageList implements Component {
       </div>
     `;
 
+    // TINY Material Icons - using specific tiny class
     const copyBtn = `<button class="copy-message-btn" onclick="window.chatApp.copyMessage('${message.id}')" title="Copy Text">
-      <span class="material-icons">content_copy</span>
+      <span class="material-icons tiny">content_copy</span>
     </button>`;
 
     // Determine if we should show save button
@@ -354,7 +306,7 @@ export class MessageList implements Component {
 
     const saveBtn = showSaveBtn
       ? `<button class="save-message-btn" onclick="window.chatApp.saveMessage('${message.id}')" title="Save Message">
-          <span class="material-icons">bookmark_border</span>
+          <span class="material-icons tiny">bookmark_border</span>
          </button>`
       : '';
 
@@ -376,9 +328,9 @@ export class MessageList implements Component {
       const safeAlt = this.escapeHtml(message.imageData.filename);
       return `
         <div class="message ${message.sender === 'me' ? 'sent' : 'received'} ${sensitiveClass} ${forwardedClass}" data-mid="${message.id}">
-          <div class="image-message">
-            <img src="${message.imageData.data}" alt="${safeAlt}" class="message-image">
-            <div class="image-caption">${safeCaption}</div>
+          <div class="image-message max-w-sm rounded-xl overflow-hidden bg-gray-800">
+            <img src="${message.imageData.data}" alt="${safeAlt}" class="message-image w-full h-auto block cursor-pointer transition-transform duration-200 hover:scale-[1.02]">
+            <div class="image-caption px-3 py-3 text-sm text-white bg-black/30">${safeCaption}</div>
           </div>
           ${footer}
         </div>

@@ -1,4 +1,4 @@
-import './index.css';
+import './tailwind-output.css'; // Use compiled Tailwind CSS
 import './styles/components.css';
 import type { ChatAppPublic } from './renderer/types/public';
 import { getPreferredTarget, setPreferredTarget } from './shared/EntryPointHandler';
@@ -25,6 +25,7 @@ if (target === 'mobile') {
     })
     .catch((error: unknown) => {
       console.error('Failed to load MobileChatApp module:', error);
+      // Fallback to regular version
       import('./renderer/ChatApp').then(({ ChatApp }) => {
         const app: ChatAppPublic = new ChatApp();
         window.chatApp = app;

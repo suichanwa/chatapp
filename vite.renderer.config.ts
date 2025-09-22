@@ -15,17 +15,5 @@ export default defineConfig({
     strictPort: true,
   },
   base: './',
-  css: {
-    postcss: {
-      plugins: [
-        require('tailwindcss'),
-        require('autoprefixer'),
-      ],
-    },
-  },
-  optimizeDeps: {
-    include: ['tailwindcss', 'autoprefixer']
-  },
-  // Ensure proper handling of Material Icons and other assets
   assetsInclude: ['**/*.woff', '**/*.woff2', '**/*.eot', '**/*.ttf'],
 });

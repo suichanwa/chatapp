@@ -11,10 +11,15 @@ export default defineConfig({
     rollupOptions: {
       external: [
         'electron',
-        '@electron-fonts/material-icons' // Add this to externals
+        '@electron-fonts/material-icons',
+        'tailwindcss', // External so preload doesn't try to bundle it
+        'autoprefixer'
       ]
     },
     outDir: '.vite/build',
-    emptyOutDir: false // Don't empty the dir since main.js is also there
-  }
+    emptyOutDir: false, // Don't empty the dir since main.js is also there
+    // Disable CSS processing for preload
+    cssCodeSplit: false,
+  },
+  // No CSS config for preload
 });
