@@ -1,301 +1,204 @@
-import { EventBus } from '../../Utils/EventBus';
-import type { UIComponent } from '../../../types/components';
+import { Modal } from '../../../../renderer/components/Modal';
+import type { Component } from '../../../../renderer/types/components';
+import { ErrorModal } from '../ErrorModal';
+import { ConnectionForm } from '../ConnectionForm';
+import { InfoPanel } from '../InfoPanel';
+import { SecuritySettings } from '../SecuritySettings';
+import { NewChatModalStyles } from '../../../../styles/NewChatModalStyles';
 
-export class NewChatModal implements UIComponent {
-  private eventBus = EventBus.getInstance();
-  private isVisible = false;
+interface NewChatModalCallbacks {
+  onConnect?: (address: string, name: string) => Promise<void>;
+  onStartServer?: () => Promise<void>;
+}
+
+export class NewChatModal implements Component {
+  private modal: Modal;
+  private callbacks: NewChatModalCallbacks = {};
+  private serverInfo: { address: string; port: number } | null = null;
+  private errorModal = new ErrorModal();
   private currentTab: 'connect' | 'info' = 'connect';
 
-  async initialize(): Promise<void> {
-    this.render();
-    this.setupEventListeners();
+  // Sub-components
+  private connectionForm: ConnectionForm;
+  private infoPanel: InfoPanel;
+  private securitySettings: SecuritySettings;
+  private styles: NewChatModalStyles;
+
+  constructor(callbacks: NewChatModalCallbacks = {}) {
+    this.callbacks = callbacks;
+    this.styles = new NewChatModalStyles();
+    this.connectionForm = new ConnectionForm();
+    this.infoPanel = new InfoPanel();
+    this.securitySettings = new SecuritySettings();
+    
+    this.modal = new Modal(
+      'new-chat-modal',
+      '<span class="material-icons" style="vertical-align: middle; margin-right: 8px;">add_circle</span>Create New Chat',
+      this.getModalContent(),
+      'new-chat-modal'
+    );
   }
 
-  render(): void {
-    // Create the modal HTML
-    const modalHTML = `
-      <!-- New Chat Modal -->
-      <div id="new-chat-modal" class="modal">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h3>🆕 Create New Chat</h3>
-            <button class="modal-close" id="modal-close">&times;</button>
-          </div>
-          <div class="modal-body">
-            <div class="connection-tabs">
-              <button class="tab-btn active" data-tab="connect">Connect to Peer</button>
-              <button class="tab-btn" data-tab="info">My Connection Info</button>
-            </div>
-            
-            <div class="tab-content active" id="connect-tab">
-              <div class="form-group">
-                <label>Peer Address (IP:Port)</label>
-                <input type="text" id="peer-address" placeholder="127.0.0.1:8080" />
-              </div>
-              <div class="form-group">
-                <label>Chat Name</label>
-                <input type="text" id="chat-name" placeholder="Chat with friend" />
-              </div>
-              <button id="connect-btn" class="primary-btn">Connect</button>
-            </div>
-            
-            <div class="tab-content" id="info-tab">
-              <div class="info-section">
-                <h4>📡 Your Connection Info</h4>
-                <div class="info-item">
-                  <label>Server Status:</label>
-                  <span id="modal-server-status">Not started</span>
-                </div>
-                <div class="info-item">
-                  <label>Your Address:</label>
-                  <span id="modal-my-address">Unknown</span>
-                  <button id="copy-address" class="copy-btn">📋</button>
-                </div>
-                <div class="info-item">
-                  <label>Your Public Key:</label>
-                  <textarea id="my-public-key" readonly></textarea>
-                  <button id="copy-key" class="copy-btn">📋</button>
-                </div>
-              </div>
-              <button id="start-server-btn" class="primary-btn">Start Server</button>
-            </div>
-          </div>
-        </div>
+  async initialize(): Promise<void> {
+    console.log('🚀 NewChatModal: Starting initialization...');
+    try {
+      await Promise.all([
+        this.modal.initialize(),
+        this.styles.initialize(),
+        this.connectionForm.initialize(),
+        this.infoPanel.initialize(),
+        this.securitySettings.initialize()
+      ]);
+      
+      this.modal.setContentUpdateCallback(() => {
+        this.bindDelegatedHandlers();
+      });
+      
+      this.bindDelegatedHandlers();
+      console.log('✅ NewChatModal: Initialization complete!');
+    } catch (error) {
+      console.error('❌ NewChatModal: Initialization failed:', error);
+      throw error;
+    }
+  }
+
+  private getModalContent(): string {
+    return `
+      <div class="new-chat-content">
+        ${this.renderTabNavigation()}
+        ${this.connectionForm.render(this.currentTab === 'connect')}
+        ${this.infoPanel.render(this.currentTab === 'info', this.serverInfo)}
       </div>
     `;
+  }
 
-    // Append to body if not already there
-    if (!document.getElementById('new-chat-modal')) {
-      document.body.insertAdjacentHTML('beforeend', modalHTML);
+  private renderTabNavigation(): string {
+    return `
+      <div class="connection-tabs" role="tablist" aria-label="New Chat Tabs">
+        <button class="tab-btn ${this.currentTab === 'connect' ? 'active' : ''}" data-tab="connect" role="tab" aria-selected="${this.currentTab === 'connect'}" aria-controls="connect-tab">
+          <span class="material-icons tab-icon">connect_without_contact</span>
+          <span class="tab-label">Connect to Peer</span>
+        </button>
+        <button class="tab-btn ${this.currentTab === 'info' ? 'active' : ''}" data-tab="info" role="tab" aria-selected="${this.currentTab === 'info'}" aria-controls="info-tab">
+          <span class="material-icons tab-icon">info</span>
+          <span class="tab-label">My Connection Info</span>
+        </button>
+      </div>
+    `;
+  }
+
+  private bindDelegatedHandlers(): void {
+    const root = this.modal.getElement();
+    if (!root) return;
+
+    // Remove old handlers
+    const oldHandler = (root as HTMLElement & { _newChatHandler?: EventListener })._newChatHandler;
+    const oldChangeHandler = (root as HTMLElement & { _newChatChangeHandler?: EventListener })._newChatChangeHandler;
+    
+    if (oldHandler) {
+      root.removeEventListener('click', oldHandler);
     }
-  }
+    if (oldChangeHandler) {
+      root.removeEventListener('change', oldChangeHandler);
+    }
 
-  private setupEventListeners(): void {
-    // Modal close handlers
-    const modalClose = document.getElementById('modal-close');
-    const modal = document.getElementById('new-chat-modal');
-    
-    modalClose?.addEventListener('click', () => this.hide());
-    modal?.addEventListener('click', (e) => {
-      if (e.target === modal) this.hide();
-    });
-
-    // Tab switching
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const target = e.target as HTMLElement;
-        const tabName = target.dataset.tab as 'connect' | 'info';
-        if (tabName) this.switchTab(tabName);
-      });
-    });
-
-    // Connection actions
-    const connectBtn = document.getElementById('connect-btn');
-    const startServerBtn = document.getElementById('start-server-btn');
-    const copyAddressBtn = document.getElementById('copy-address');
-    const copyKeyBtn = document.getElementById('copy-key');
-
-    connectBtn?.addEventListener('click', () => this.connectToPeer());
-    startServerBtn?.addEventListener('click', () => this.startServer());
-    copyAddressBtn?.addEventListener('click', () => this.copyToClipboard('address'));
-    copyKeyBtn?.addEventListener('click', () => this.copyToClipboard('key'));
-
-    // Listen for external events to update modal info
-    this.eventBus.on('network:server-started', (serverInfo: { address: string; port: number }) => {
-      this.updateServerInfo(serverInfo);
-    });
-
-    this.eventBus.on('crypto:identity-ready', (publicKey: string) => {
-      this.updatePublicKey(publicKey);
-    });
-  }
-
-  show(): void {
-    const modal = document.getElementById('new-chat-modal');
-    const app = document.getElementById('app');
-    
-    if (modal) {
-      modal.classList.add('show');
-      this.isVisible = true;
+    const newClickHandler = async (e: Event) => {
+      const target = e.target as HTMLElement;
       
-      // Add blur effect to background
-      if (app) {
-        app.classList.add('blurred');
-        app.classList.add('modal-animate-in');
-        setTimeout(() => app.classList.remove('modal-animate-in'), 400);
+      // Tab switching
+      const tabBtn = target.closest('.tab-btn') as HTMLButtonElement | null;
+      if (tabBtn && tabBtn.dataset.tab) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.switchTab(tabBtn.dataset.tab as 'connect' | 'info');
+        return false;
       }
-      
-      // Update modal info when shown
-      this.updateModalInfo();
-    }
-  }
 
-  hide(): void {
-    const modal = document.getElementById('new-chat-modal');
-    const app = document.getElementById('app');
-    
-    if (modal) {
-      modal.classList.remove('show');
-      this.isVisible = false;
-      
-      // Remove blur effect from background
-      if (app) {
-        app.classList.remove('blurred');
-        app.classList.add('modal-animate-out');
-        setTimeout(() => app.classList.remove('modal-animate-out'), 400);
+      // Delegate to sub-components
+      if (this.currentTab === 'connect') {
+        await this.connectionForm.handleClick(e, this.callbacks);
+      } else {
+        await this.infoPanel.handleClick(e, this.callbacks);
       }
-    }
+    };
+
+    const newChangeHandler = (e: Event) => {
+      if (this.currentTab === 'info') {
+        this.securitySettings.handleChange(e);
+      }
+    };
+
+    (root as HTMLElement & { _newChatHandler?: EventListener })._newChatHandler = newClickHandler;
+    (root as HTMLElement & { _newChatChangeHandler?: EventListener })._newChatChangeHandler = newChangeHandler;
+    
+    root.addEventListener('click', newClickHandler, true);
+    root.addEventListener('change', newChangeHandler, true);
+
+    // Enter key handling
+    root.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (this.currentTab === 'connect') {
+        this.connectionForm.handleKeydown(e, this.callbacks);
+      }
+    });
   }
 
   private switchTab(tabName: 'connect' | 'info'): void {
     this.currentTab = tabName;
-    
-    // Update tab buttons
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.classList.remove('active');
-    });
-    const targetBtn = document.querySelector(`[data-tab="${tabName}"]`);
-    targetBtn?.classList.add('active');
-    
-    // Update tab content
-    document.querySelectorAll('.tab-content').forEach(content => {
-      content.classList.remove('active');
-    });
-    const targetContent = document.getElementById(`${tabName}-tab`);
-    targetContent?.classList.add('active');
-  }
+    this.modal.setContent(this.getModalContent());
+    this.bindDelegatedHandlers();
 
-  private async connectToPeer(): Promise<void> {
-    const peerAddressInput = document.getElementById('peer-address') as HTMLInputElement;
-    const chatNameInput = document.getElementById('chat-name') as HTMLInputElement;
-    
-    const peerAddress = peerAddressInput.value.trim();
-    const chatName = chatNameInput.value.trim();
-    
-    if (!peerAddress) {
-      alert('Please enter a peer address');
-      return;
-    }
-    
-    try {
-      const [ip, port] = peerAddress.split(':');
-      const portNum = parseInt(port);
-      
-      if (!ip || !portNum) {
-        throw new Error('Invalid address format. Use IP:PORT');
-      }
-      
-      console.log(`Connecting to ${ip}:${portNum}...`);
-      
-      // Emit connection request via EventBus
-      this.eventBus.emit('network:connect-request', {
-        address: ip,
-        port: portNum,
-        chatName: chatName || `Chat with ${ip}:${portNum}`
+    if (tabName === 'info') {
+      this.updateConnectionInfo().catch((error: unknown) => {
+        console.warn('Failed to update connection info:', error);
       });
-      
-      // Clear inputs and hide modal
-      peerAddressInput.value = '';
-      chatNameInput.value = '';
-      this.hide();
-      
-    } catch (error) {
-      console.error('Connection error:', error);
-      alert(`Connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } else {
+      setTimeout(() => {
+        const root = this.modal.getElement();
+        root?.querySelector<HTMLInputElement>('#peer-address')?.focus();
+      }, 100);
     }
   }
 
-  private async startServer(): Promise<void> {
-    try {
-      // Emit server start request via EventBus
-      this.eventBus.emit('network:start-server-request');
-      
-    } catch (error) {
-      console.error('Failed to start server:', error);
-      alert('Failed to start server');
+  public open(): void {
+    console.log('🔓 NewChatModal: Opening modal...');
+    this.modal.setContent(this.getModalContent());
+    this.bindDelegatedHandlers();
+    this.modal.open();
+
+    if (this.currentTab === 'connect') {
+      setTimeout(() => {
+        const root = this.modal.getElement();
+        root?.querySelector<HTMLInputElement>('#peer-address')?.focus();
+      }, 100);
+    } else {
+      this.updateConnectionInfo().catch((error: unknown) => {
+        console.warn('Failed to update connection info:', error);
+      });
     }
   }
 
-  private async copyToClipboard(type: 'address' | 'key'): Promise<void> {
-    try {
-      let textToCopy = '';
-
-      if (type === 'address') {
-        const addressEl = document.getElementById('modal-my-address');
-        textToCopy = addressEl?.textContent || '';
-      } else {
-        const keyEl = document.getElementById('my-public-key') as HTMLTextAreaElement;
-        textToCopy = keyEl?.value || '';
-      }
-
-      if (!textToCopy) return;
-
-      // Prefer in-app secure clipboard; falls back to system clipboard if unavailable
-      if (window.electronAPI?.secureClipboard) {
-        await window.electronAPI.secureClipboard.writeText(textToCopy, { ttlMs: 120_000 });
-      } else if (window.electronAPI?.clipboard) {
-        await window.electronAPI.clipboard.writeText(textToCopy);
-      } else if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(textToCopy);
-      } else {
-        throw new Error('No clipboard API available');
-      }
-
-      const button = document.getElementById(type === 'address' ? 'copy-address' : 'copy-key');
-      if (button) {
-        const original = button.innerHTML;
-        button.innerHTML = '✅';
-        button.classList.add('success');
-        setTimeout(() => {
-          button.innerHTML = original;
-          button.classList.remove('success');
-        }, 1500);
-      }
-    } catch (error) {
-      console.error('Failed to copy to clipboard:', error);
-      alert('Failed to copy to clipboard');
-    }
+  public close(): void {
+    this.modal.close();
   }
 
-  private updateModalInfo(): void {
-    // Request fresh info from components
-    this.eventBus.emit('network:get-server-info');
-    this.eventBus.emit('crypto:get-public-key');
+  public updateServerInfo(address: string, port: number): void {
+    this.serverInfo = { address, port };
+    this.infoPanel.updateServerInfo(address, port);
   }
 
-  private updateServerInfo(serverInfo: { address: string; port: number }): void {
-    const serverStatusEl = document.getElementById('modal-server-status');
-    const myAddressEl = document.getElementById('modal-my-address');
-    
-    if (serverStatusEl) {
-      serverStatusEl.textContent = 'Running';
-    }
-    
-    if (myAddressEl) {
-      myAddressEl.textContent = `${serverInfo.address}:${serverInfo.port}`;
-    }
+  public async updateConnectionInfo(): Promise<void> {
+    await this.infoPanel.updateConnectionInfo();
   }
 
-  private updatePublicKey(publicKey: string): void {
-    const publicKeyEl = document.getElementById('my-public-key') as HTMLTextAreaElement;
-    if (publicKeyEl) {
-      publicKeyEl.value = publicKey;
-    }
-  }
-
-  isOpen(): boolean {
-    return this.isVisible;
+  public setCallbacks(callbacks: NewChatModalCallbacks): void {
+    this.callbacks = { ...this.callbacks, ...callbacks };
   }
 
   cleanup(): void {
-    // Remove event listeners
-    this.eventBus.off('network:server-started', this.updateServerInfo.bind(this));
-    this.eventBus.off('crypto:identity-ready', this.updatePublicKey.bind(this));
-    
-    // Remove modal from DOM
-    const modal = document.getElementById('new-chat-modal');
-    if (modal) {
-      modal.remove();
-    }
+    this.styles.cleanup();
+    this.connectionForm.cleanup();
+    this.infoPanel.cleanup();
+    this.securitySettings.cleanup();
+    this.modal?.cleanup();
   }
 }

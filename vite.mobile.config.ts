@@ -17,7 +17,9 @@ export default defineConfig({
     minify: 'esbuild',
   },
   server: {
-    port: 5174, // Different port from main app
+    port: 0, // Use random port for mobile dev server too
+    strictPort: false,
+    host: '127.0.0.1',
   },
   base: './',
   define: {
@@ -32,39 +34,16 @@ export default defineConfig({
     {
       name: 'rename-mobile-index',
       generateBundle(options, bundle) {
-        // Find the mobile-index.html file and rename it
-        const mobileIndexKey = Object.keys(bundle).find(key => 
-          key.includes('mobile-index.html') || key === 'mobile-index.html'
-        );
-        
-        if (mobileIndexKey && bundle[mobileIndexKey]) {
-          // Create new index.html entry
-          bundle['index.html'] = bundle[mobileIndexKey];
-          // Remove the old entry
-          delete bundle[mobileIndexKey];
-          console.log('✅ Renamed mobile-index.html to index.html');
-        } else {
-          console.log('❌ mobile-index.html not found in bundle keys:', Object.keys(bundle));
+        const mobileIndexHtml = bundle['mobile-index.html'];
+        if (mobileIndexHtml && mobileIndexHtml.type === 'asset') {
+          // Rename to index.html for mobile build
+          bundle['index.html'] = {
+            ...mobileIndexHtml,
+            fileName: 'index.html'
+          };
+          delete bundle['mobile-index.html'];
         }
       },
-      
-      // Alternative approach: use writeBundle hook
-      writeBundle(options, bundle) {
-        const fs = require('fs');
-        const path = require('path');
-        
-        const distDir = options.dir || 'dist-mobile';
-        const mobileIndexPath = path.join(distDir, 'mobile-index.html');
-        const indexPath = path.join(distDir, 'index.html');
-        
-        // Check if mobile-index.html exists and copy it to index.html
-        if (fs.existsSync(mobileIndexPath)) {
-          fs.copyFileSync(mobileIndexPath, indexPath);
-          console.log('✅ Copied mobile-index.html to index.html');
-        } else {
-          console.log('❌ mobile-index.html not found at:', mobileIndexPath);
-        }
-      }
     }
-  ]
+  ],
 });

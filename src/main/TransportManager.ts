@@ -26,11 +26,17 @@ const KEEPALIVE_MS = 30_000;
 const RATE_WINDOW_MS = 60_000;            // 1 minute window
 const MAX_HANDSHAKES_PER_WINDOW = 20;     // max unauthenticated handshakes per IP / minute
 
-const BIND_HOST = process.env.CHATAPP_BIND_HOST || '0.0.0.0';
+const BIND_HOST = process.env.CHATAPP_BIND_HOST || '127.0.0.1'; // Changed to localhost for security
 // Optional PSK: if set on both peers, handshake must include matching hash
 const PSK_HASH = process.env.CHATAPP_PSK
   ? crypto.createHash('sha256').update(process.env.CHATAPP_PSK).digest('hex')
   : null;
+
+// Default port range for dynamic/private ports
+const DEFAULT_PORT_RANGE = {
+  min: 49152, // Start of dynamic/private port range
+  max: 65535  // End of dynamic/private port range
+};
 
 function getLocalIPv4(): string | null {
   const nets = os.networkInterfaces();
@@ -69,8 +75,8 @@ export class TransportManager {
 
   private setupIPC() {
     ipcMain.handle('transport:startServer', async (_e, port?: number) => {
-      const defaultPort = Number(process.env.CHATAPP_PORT) || 51750;
-      return this.startServer(port ?? defaultPort);
+      // Don't use default port anymore - always use random if not specified
+      return this.startServer(port);
     });
 
     // Return a structured result instead of throwing
@@ -128,7 +134,21 @@ export class TransportManager {
       return { port: this.serverPort, address: this.serverAdvertisedAddress || this.serverAddress };
     }
 
-    const preferred = typeof port === 'number' ? port : (Number(process.env.CHATAPP_PORT) || 51750);
+    // Use random port by default for better security and testing
+    let preferred: number;
+    if (typeof port === 'number' && port > 0) {
+      preferred = port;
+    } else {
+      const envPort = Number(process.env.CHATAPP_PORT);
+      if (envPort > 0) {
+        preferred = envPort;
+      } else {
+        // Generate random port in safe range by default
+        preferred = this.getRandomPort();
+      }
+    }
+
+    console.log(`🌐 TransportManager: Attempting to start server on port ${preferred}...`);
 
     const listenOnce = (p: number): Promise<{ port: number; address: string }> =>
       new Promise((resolve, reject) => {
@@ -141,10 +161,12 @@ export class TransportManager {
         });
 
         server.on('error', (err: any) => {
-          if (err?.code === 'EADDRINUSE' && p !== 0) {
-            console.warn(`🌐 TransportManager: Port ${p} in use, retrying with ephemeral port...`);
+          if (err?.code === 'EADDRINUSE') {
+            // Always try random ports on conflict
+            console.warn(`🌐 TransportManager: Port ${p} in use, trying random port...`);
             server.close(() => {
-              listenOnce(0).then(resolve).catch(reject);
+              const randomPort = this.getRandomPort();
+              listenOnce(randomPort).then(resolve).catch(reject);
             });
             return;
           }
@@ -365,9 +387,6 @@ export class TransportManager {
 
     // FIX: actually read data from this socket
     socket.on('data', (chunk) => this.handleSocketData(socket, chunk, onMessage));
-
-    // remove this no-op "prime" call (optional)
-//  this.handleSocketData(socket, null as any, onMessage);
 
     socket.on('error', (error) => {
       console.error('🌐 TransportManager: Socket error:', error);
@@ -704,7 +723,7 @@ export class TransportManager {
   getServerInfo(): { port: number; address: string } | null {
     if (!this.server) return null;
     return { port: this.serverPort, address: this.serverAdvertisedAddress || this.serverAddress };
-    }
+  }
 
   isServerRunning(): boolean {
     return this.server !== null && this.server.listening;
@@ -735,5 +754,39 @@ export class TransportManager {
       this.serverAdvertisedAddress = '';
     }
     console.log('🌐 TransportManager: Cleanup completed');
+  }
+
+  // Helper method for generating random ports
+  private getRandomPort(min: number = DEFAULT_PORT_RANGE.min, max: number = DEFAULT_PORT_RANGE.max): number {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  // Enhanced method with retry logic for finding available ports
+  private async findAvailablePort(preferredPort?: number, maxRetries: number = 5): Promise<number> {
+    const testPort = (port: number): Promise<boolean> => {
+      return new Promise((resolve) => {
+        const testServer = createServer();
+        testServer.listen(port, '127.0.0.1', () => {
+          testServer.close(() => resolve(true));
+        });
+        testServer.on('error', () => resolve(false));
+      });
+    };
+
+    // Try preferred port first
+    if (preferredPort && await testPort(preferredPort)) {
+      return preferredPort;
+    }
+
+    // Try random ports
+    for (let i = 0; i < maxRetries; i++) {
+      const randomPort = this.getRandomPort();
+      if (await testPort(randomPort)) {
+        return randomPort;
+      }
+    }
+
+    // Fallback to system-assigned port
+    return 0;
   }
 }

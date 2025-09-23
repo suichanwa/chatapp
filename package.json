@@ -1,20 +1,50 @@
 {
   "name": "chatapp",
-  "productName": "chatapp",
+  "productName": "Secure Chat",
   "version": "1.0.0",
-  "description": "My Electron application description",
+  "description": "Secure end-to-end encrypted chat application with P2P networking",
   "main": ".vite/build/main.js",
   "scripts": {
     "prestart": "node -e \"require('fs').mkdirSync('.vite/build',{recursive:true})\" && npm run build:css:once",
     "build:css": "npx @tailwindcss/cli -i ./src/index.css -o ./src/tailwind-output.css --watch",
     "build:css:once": "npx @tailwindcss/cli -i ./src/index.css -o ./src/tailwind-output.css",
     "dev:css": "npx @tailwindcss/cli -i ./src/index.css -o ./src/tailwind-output.css --watch",
+    "dev": "concurrently \"npm run dev:css\" \"electron-forge start\"",
+    "dev:renderer": "vite --config vite.renderer.config.ts",
+    "dev:main": "electron-forge start",
+    "dev:multi": "npm run dev:renderer -- --port 0",
     "start": "electron-forge start",
+    "build": "npm run build:css:once && electron-forge package",
+    "build:renderer": "vite build --config vite.renderer.config.ts",
+    "build:main": "electron-forge package",
+    "build:mobile": "npm run build:css:once && vite build --config vite.mobile.config.ts",
     "package": "electron-forge package",
     "make": "electron-forge make",
-    "cap:open": "npx cap open"
+    "publish": "electron-forge publish",
+    "mobile:build": "npm run build:mobile",
+    "mobile:sync": "npm run mobile:build && npx cap sync",
+    "mobile:run:android": "npm run mobile:sync && npx cap run android",
+    "mobile:run:ios": "npm run mobile:sync && npx cap run ios",
+    "mobile:open:android": "npx cap open android",
+    "mobile:open:ios": "npx cap open ios",
+    "cap:open": "npx cap open",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "clean": "rimraf .vite dist-* dist node_modules/.vite",
+    "reset": "npm run clean && npm install"
   },
-  "keywords": [],
+  "keywords": [
+    "electron",
+    "chat",
+    "secure",
+    "encryption",
+    "p2p",
+    "end-to-end",
+    "rsa",
+    "aes"
+  ],
   "author": {
     "name": "suichanwa",
     "email": "augustinnegura746@gmail.com"
@@ -39,17 +69,24 @@
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
     "autoprefixer": "^10.4.21",
+    "concurrently": "^8.2.2",
     "electron": "38.0.0",
     "eslint": "^8.57.1",
     "eslint-plugin-import": "^2.32.0",
     "postcss": "^8.5.6",
+    "rimraf": "^5.0.10",
     "tailwindcss": "^4.1.13",
     "typescript": "~4.5.4",
     "vite": "^5.4.20"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",
+    "@electron-fonts/material-icons": "^1.2.0",
     "electron-squirrel-startup": "^1.0.1",
     "errno": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   }
 }

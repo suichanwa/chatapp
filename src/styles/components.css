@@ -357,6 +357,63 @@
   font-family: 'Material Icons';
 }
 
+/* FIXED: Privacy/Sensitive Messages - Only blur timestamps, not entire message */
+.message.sensitive {
+  /* Remove the blur from the entire message */
+  filter: none !important;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.message.sensitive.revealed {
+  filter: none !important;
+}
+
+/* Only blur the timestamp area when message is sensitive and not revealed */
+.message.sensitive:not(.revealed) .message-time,
+.message.sensitive:not(.revealed) .message-time-wrapper {
+  filter: blur(4px);
+  transition: filter 0.3s ease;
+}
+
+/* Remove blur when message is revealed */
+.message.sensitive.revealed .message-time,
+.message.sensitive.revealed .message-time-wrapper {
+  filter: none;
+}
+
+/* Hover effect for sensitive messages - slightly reduce timestamp blur */
+.message.sensitive:not(.revealed):hover .message-time,
+.message.sensitive:not(.revealed):hover .message-time-wrapper {
+  filter: blur(2px);
+}
+
+/* Privacy indicator - only show on sensitive unrevealed messages */
+.message.sensitive:not(.revealed)::before {
+  content: "👁️ Click to reveal time";
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 10;
+}
+
+.message.sensitive:not(.revealed):hover::before {
+  opacity: 1;
+}
+
+.message.sensitive.revealed::before {
+  display: none;
+}
+
 /* Enhanced Animations */
 @keyframes pulse {
   0%, 100% { 
@@ -445,6 +502,11 @@
 
   .modal-content {
     @apply max-w-full;
+  }
+
+  /* Mobile: Always show privacy indicator for sensitive messages */
+  .message.sensitive:not(.revealed)::before {
+    opacity: 0.7;
   }
 }
 
@@ -616,6 +678,11 @@ textarea:hover::-webkit-scrollbar-thumb {
   .btn {
     @apply border-2 border-current;
   }
+
+  .message.sensitive:not(.revealed) .message-time,
+  .message.sensitive:not(.revealed) .message-time-wrapper {
+    border: 2px solid rgba(255, 255, 255, 0.3);
+  }
 }
 
 /* Reduced Motion Support */
@@ -643,6 +710,15 @@ textarea:hover::-webkit-scrollbar-thumb {
   .modal .modal-content,
   .modal .modal-overlay {
     @apply transition-none;
+  }
+
+  .message.sensitive:not(.revealed) .message-time,
+  .message.sensitive:not(.revealed) .message-time-wrapper {
+    transition: none;
+  }
+
+  .message.sensitive:not(.revealed)::before {
+    transition: none;
   }
 }
 
@@ -692,5 +768,11 @@ textarea:hover::-webkit-scrollbar-thumb {
   
   .modal-content {
     @apply shadow-none;
+  }
+
+  /* Remove blur for print */
+  .message.sensitive:not(.revealed) .message-time,
+  .message.sensitive:not(.revealed) .message-time-wrapper {
+    filter: none !important;
   }
 }

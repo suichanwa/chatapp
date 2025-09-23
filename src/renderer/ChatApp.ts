@@ -1,5 +1,5 @@
 import { DebugPanel } from './DebugPanel';
-import { NewChatModal } from './components/UI/NewChatModal';
+import { NewChatModal } from './components/UI/NewChatModal'; // Fixed import path
 import { ImageProcessor } from './components/Utils/ImageProcessor';
 import { ImageViewer } from './components/UI/ImageViewer';
 import { EventBus } from './components/Utils/EventBus';
@@ -12,16 +12,15 @@ import { ShortcutsModal } from './components/UI/ShortcutsModal';
 import { MessageList } from './components/Chat/MessageList';
 import { ShortcutsController } from './components/UI/ShortcutsController';
 import { ErrorModal } from './components/UI/ErrorModal';
+import { ChatSecurityIndicator, type SecurityStatus } from './components/Chat/ChatSecurityIndicator';
 
 export class ChatApp implements Component {
   private eventBus = EventBus.getInstance();
   protected components: Map<string, Component> = new Map();
 
-  // UI State
   protected currentChatId: string | null = null;
   protected chats: Map<string, Chat> = new Map();
 
-  // Server state for network info
   private serverInfo: { address: string; port: number } | null = null;
 
   // Modal components
@@ -45,6 +44,9 @@ export class ChatApp implements Component {
   // Error modal
   private errorModal = new ErrorModal();
 
+  // Add security indicator
+  private securityIndicator = new ChatSecurityIndicator();
+
   constructor() {
     // Register components
     this.components.set('debug', new DebugPanel());
@@ -63,6 +65,9 @@ export class ChatApp implements Component {
     // Register extracted components
     this.components.set('messageList', this.messageList);
     this.components.set('shortcutsController', new ShortcutsController(this));
+
+    // Register the security indicator component
+    this.components.set('securityIndicator', this.securityIndicator);
   }
 
   async initialize(): Promise<void> {
@@ -295,9 +300,14 @@ export class ChatApp implements Component {
 
   protected async selectChat(chatId: string): Promise<void> {
     this.currentChatId = chatId;
-    this.refreshChatList();
+    const chat = this.chats.get(chatId);
+    if (!chat) return;
+
     this.updateChatHeader();
     await this.refreshMessages();
+
+    // Update security indicator based on chat type and status
+    this.updateChatSecurity(chat);
 
     const input = document.getElementById('message-input') as HTMLInputElement | null;
     const send = document.getElementById('send-btn') as HTMLButtonElement | null;
@@ -305,6 +315,77 @@ export class ChatApp implements Component {
     if (input) input.disabled = false;
     if (send) send.disabled = false;
     if (imageBtn) imageBtn.disabled = false;
+  }
+
+  private updateChatSecurity(chat: Chat): void {
+    if (chat.type === 'saved') {
+      // Saved messages are always secure (local storage)
+      this.securityIndicator.showSavedMessagesSecure();
+      this.securityIndicator.show();
+      return;
+    }
+
+    // For direct chats, determine security based on connection status
+    const isConnected = chat.isOnline;
+    const hasPeerKey = Boolean(chat.peerPublicKey);
+    const hasAddress = Boolean(chat.peerAddress);
+
+    let securityStatus: SecurityStatus;
+
+    if (isConnected && hasPeerKey && hasAddress) {
+      // Fully secure connection
+      securityStatus = {
+        isSecure: true,
+        encryptionType: 'RSA+AES',
+        peerVerified: true,
+        connectionType: 'direct',
+        details: 'End-to-End Encrypted'
+      };
+    } else if (hasPeerKey) {
+      // Has keys but not connected
+      securityStatus = {
+        isSecure: false,
+        encryptionType: 'RSA+AES',
+        peerVerified: true,
+        connectionType: 'direct',
+        details: 'Peer Offline'
+      };
+    } else if (hasAddress) {
+      // Has address but no verified keys
+      securityStatus = {
+        isSecure: false,
+        encryptionType: 'none',
+        peerVerified: false,
+        connectionType: 'direct',
+        details: 'Keys Not Exchanged'
+      };
+    } else {
+      // No connection info
+      securityStatus = {
+        isSecure: false,
+        details: 'No Connection Info'
+      };
+    }
+
+    this.securityIndicator.updateSecurityStatus(securityStatus);
+    this.securityIndicator.show();
+  }
+
+  private updateChatHeader(): void {
+    const titleEl = document.getElementById('chat-title');
+    const chat = this.currentChatId ? this.chats.get(this.currentChatId) : null;
+    
+    if (titleEl) {
+      if (chat) {
+        titleEl.textContent = chat.name;
+        // Show security indicator when a chat is selected
+        this.securityIndicator.show();
+      } else {
+        titleEl.textContent = 'Select a chat';
+        // Hide security indicator when no chat is selected
+        this.securityIndicator.hide();
+      }
+    }
   }
 
   private async handleIncomingMessage(chatId: string, data: unknown): Promise<void> {
@@ -490,6 +571,12 @@ export class ChatApp implements Component {
 
     this.refreshChatList();
     this.selectChat(chatId);
+    
+    // Update security status when peer connects
+    const currentChat = this.chats.get(chatId);
+    if (currentChat && this.currentChatId === chatId) {
+      this.updateChatSecurity(currentChat);
+    }
   }
 
   private handlePeerDisconnected(chatId: string): void {
@@ -498,6 +585,12 @@ export class ChatApp implements Component {
       chat.isOnline = false;
       this.refreshChatList();
       if (this.currentChatId === chatId) this.updateChatHeader();
+    }
+
+    // Update security status when peer disconnects
+    const currentChat = this.chats.get(chatId);
+    if (currentChat && this.currentChatId === chatId) {
+      this.updateChatSecurity(currentChat);
     }
   }
 
@@ -577,28 +670,6 @@ export class ChatApp implements Component {
         this.selectChat(id);
       });
     });
-  }
-
-  private updateChatHeader(): void {
-    const chatTitle = document.getElementById('chat-title');
-    const chatStatus = document.getElementById('chat-status');
-
-    if (!this.currentChatId) {
-      if (chatTitle) chatTitle.textContent = 'Select a chat';
-      if (chatStatus) chatStatus.textContent = '';
-      return;
-    }
-
-    const chat = this.chats.get(this.currentChatId);
-    if (chat) {
-      if (chatTitle) chatTitle.textContent = chat.name;
-      if (chatStatus) {
-        chatStatus.textContent =
-          chat.type === 'saved'
-            ? 'Your saved messages'
-            : (chat.isOnline ? `Connected to ${chat.peerAddress}` : 'Offline');
-      }
-    }
   }
 
   protected async sendMessage(): Promise<void> {

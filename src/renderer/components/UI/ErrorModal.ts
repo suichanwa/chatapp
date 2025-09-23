@@ -1,6 +1,11 @@
 export class ErrorModal {
   private root: HTMLDivElement | null = null;
 
+  async initialize(): Promise<void> {
+    // ErrorModal doesn't need async initialization
+    console.log('✅ ErrorModal: Ready');
+  }
+
   show(message: string): void {
     if (!this.root) {
       this.root = document.createElement('div');
@@ -30,11 +35,15 @@ export class ErrorModal {
   }
 
   close(): void {
-    if (this.root) this.root.style.display = 'none';
+    if (this.root) {
+      this.root.style.display = 'none';
+    }
   }
 
   cleanup(): void {
-    if (this.root) this.root.remove();
-    this.root = null;
+    if (this.root) {
+      this.root.remove();
+      this.root = null;
+    }
   }
 }
