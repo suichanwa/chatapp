@@ -2,45 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
-
-export interface ImageData {
-  filename: string;
-  mimeType: string;
-  size: number;
-  width?: number;
-  height?: number;
-  data: string; // Base64 encoded
-  thumbnail?: string; // Base64 encoded thumbnail
-}
-
-export interface Message {
-  id: string;
-  chatId: string;
-  content: string;
-  timestamp: number;
-  sender: string;
-  encrypted: boolean;
-  type: 'text' | 'image' | 'system'; // Add message type
-  encryptedData?: {
-    data: string;
-    iv: string;
-    authTag: string;
-    sessionKey?: string;
-  };
-  imageData?: ImageData;
-  replyTo?: string; // For replies
-}
-
-export interface Chat {
-  id: string;
-  name: string;
-  participants: string[];
-  lastMessage?: Message;
-  peerAddress?: string;
-  peerPublicKey?: string;
-  type: 'direct' | 'saved'; // Add chat type
-  isOnline?: boolean;
-}
+import type { ImageData, Message, Chat } from '../types'; // Import from main types
 
 export class DatabaseManager {
   private dbPath: string;

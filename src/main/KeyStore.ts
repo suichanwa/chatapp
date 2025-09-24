@@ -2,11 +2,7 @@ import crypto from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
-
-export interface IdentityKeys {
-  publicKey: string;
-  privateKey: string;
-}
+import type { IdentityKeys } from '../types'; // Import from your main types file
 
 export class KeyStore {
   private memoryKeys: Map<string, any> = new Map();

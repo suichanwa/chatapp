@@ -1,17 +1,6 @@
 import crypto from 'node:crypto';
 import { KeyStore } from './KeyStore';
-
-export interface IdentityKeys {
-  publicKey: string;
-  privateKey: string;
-}
-
-export interface EncryptedData {
-  data: string;
-  iv: string;
-  authTag: string;
-  sessionKey?: string;
-}
+import type { IdentityKeys, EncryptedData } from '../types'; // Import from main types
 
 export class CryptoEngine {
   private keyStore: KeyStore;
