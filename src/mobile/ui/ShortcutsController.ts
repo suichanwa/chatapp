@@ -1,6 +1,5 @@
-// filepath: c:\Users\suiseika\chatapp\src\renderer\components\UI\ShortcutsController.ts
-import type { Component } from '../../types/components';
-import type { ChatApp } from '../../ChatApp';
+import type { Component } from '../../renderer/types/components';
+import type { ChatApp } from '../../renderer/ChatApp';
 
 export class ShortcutsController implements Component {
   private app: ChatApp;

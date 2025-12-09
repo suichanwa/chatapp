@@ -1,0 +1,122 @@
+.passcode-screen {
+  width: 100%;
+  height: 100vh;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem 1rem;
+}
+
+.cancel-btn {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: #007aff;
+  font-size: 1rem;
+  padding: 0.5rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.passcode-header {
+  margin: 3rem 0 2rem 0;
+  text-align: center;
+}
+
+.passcode-header h2 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.3rem;
+  font-weight: 500;
+}
+
+.passcode-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.passcode-dots {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.passcode-dots.error .dot {
+  animation: shake 0.3s;
+  border-color: #ff3b30;
+}
+
+.passcode-dots.error .dot.filled {
+  background: #ff3b30;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-10px); }
+  75% { transform: translateX(10px); }
+}
+
+.dot {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #000;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.dot.filled {
+  background: #000;
+}
+
+.error-message {
+  color: #ff3b30;
+  font-size: 0.9rem;
+  margin: 0 0 2rem 0;
+  height: 1.2rem;
+}
+
+.passcode-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  max-width: 300px;
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.keypad-btn {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  border: none;
+  background: #f0f0f0;
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-weight: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.keypad-btn:active:not(.empty) {
+  background: #d0d0d0;
+}
+
+.keypad-btn.empty {
+  background: transparent;
+  cursor: default;
+}
+
+.keypad-btn.delete {
+  font-size: 1.3rem;
+}
+
+@media (max-width: 380px) {
+  .keypad-btn {
+    width: 60px;
+    height: 60px;
+    font-size: 1.3rem;
+  }
+}

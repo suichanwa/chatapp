@@ -1,0 +1,97 @@
+.unfocused-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999999;
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(20px) saturate(0%);
+  -webkit-backdrop-filter: blur(20px) saturate(0%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease-out;
+  pointer-events: all;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(20px) saturate(0%);
+    -webkit-backdrop-filter: blur(20px) saturate(0%);
+  }
+}
+
+.unfocused-content {
+  text-align: center;
+  color: #ffffff;
+  opacity: 0.8;
+  user-select: none;
+}
+
+.lock-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+}
+
+.unfocused-content p {
+  margin: 0.5rem 0;
+  font-size: 1.2rem;
+  font-weight: 500;
+}
+
+.unfocused-content .hint {
+  font-size: 0.9rem;
+  opacity: 0.6;
+  font-weight: 400;
+}
+
+/* Mobile specific adjustments */
+@media (max-width: 768px) {
+  .lock-icon {
+    font-size: 3rem;
+  }
+  
+  .unfocused-content p {
+    font-size: 1rem;
+  }
+  
+  .unfocused-content .hint {
+    font-size: 0.85rem;
+  }
+}
+
+/* Extra security: hide content completely */
+.unfocused-overlay::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #000;
+  opacity: 0.85;
+}
+
+.unfocused-content {
+  position: relative;
+  z-index: 1;
+}
