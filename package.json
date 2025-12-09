@@ -87,6 +87,7 @@
     "@electron-fonts/material-icons": "^1.2.0",
     "electron-squirrel-startup": "^1.0.1",
     "errno": "^1.0.0",
+    "loglayer": "^8.1.1",
     "react": "^19.2.1",
     "react-dom": "^19.2.1"
   },

@@ -37,7 +37,7 @@ export * from './main/PermissionBroker';
 export * from './main/DebugManager';
 export * from './main/TransportManager';
 
-// Mobile (explicit — do not export mobile ShortcutsController at top-level if name collides)
+// Mobile
 export * from './mobile/core/MobileEnvironment';
 export * from './mobile/core/MobileCapacitorLoader';
 export * from './mobile/core/MobileTouchHandler';
@@ -49,4 +49,6 @@ export { UnfocusedOverlay } from './mobile/ui/UnfocusedOverlay';
 
 // Shared
 export * from './shared/EntryPointHandler';
+export * from './shared/Logger';
+export * from './shared/LogHelpers';
 export * from './mobile/ui/DecoyNotesApp/DecoyNotesApp';

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { logDebug, logWarn } from '../../shared/LogHelpers';
 import './../../styles/UnfocusedOverlay.css';
 
 interface UnfocusedOverlayProps {
@@ -9,52 +10,46 @@ export const UnfocusedOverlay: React.FC<UnfocusedOverlayProps> = ({ isElectron =
   const [isUnfocused, setIsUnfocused] = useState(false);
 
   useEffect(() => {
+    logDebug('UnfocusedOverlay', 'Initializing', { isElectron });
+
     if (isElectron) {
-      // Desktop: Listen to Electron window focus events
       const handleFocus = () => setIsUnfocused(false);
       const handleBlur = () => setIsUnfocused(true);
+      const handleVisibilityChange = () => setIsUnfocused(document.hidden);
 
       window.addEventListener('focus', handleFocus);
       window.addEventListener('blur', handleBlur);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      document.addEventListener('focus', handleFocus, true);
+      document.addEventListener('blur', handleBlur, true);
 
       return () => {
         window.removeEventListener('focus', handleFocus);
         window.removeEventListener('blur', handleBlur);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        document.removeEventListener('focus', handleFocus, true);
+        document.removeEventListener('blur', handleBlur, true);
       };
     } else {
-      // Mobile: Use Capacitor App State
       const setupMobileListener = async () => {
         try {
           const { App } = await import('@capacitor/app');
-          
           const listener = await App.addListener('appStateChange', ({ isActive }) => {
             setIsUnfocused(!isActive);
           });
-
-          return () => {
-            listener.remove();
-          };
+          logDebug('UnfocusedOverlay', 'Capacitor listener attached');
+          return () => listener.remove();
         } catch (error) {
-          console.warn('Capacitor App plugin not available, using fallback');
-          
-          // Fallback to visibilitychange API
-          const handleVisibilityChange = () => {
-            setIsUnfocused(document.hidden);
-          };
-
+          logWarn('UnfocusedOverlay', 'Using fallback visibility API', error);
+          const handleVisibilityChange = () => setIsUnfocused(document.hidden);
           document.addEventListener('visibilitychange', handleVisibilityChange);
-          return () => {
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
-          };
+          return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
         }
       };
 
       let cleanup: (() => void) | undefined;
       setupMobileListener().then(fn => { cleanup = fn; });
-
-      return () => {
-        if (cleanup) cleanup();
-      };
+      return () => { if (cleanup) cleanup(); };
     }
   }, [isElectron]);
 
