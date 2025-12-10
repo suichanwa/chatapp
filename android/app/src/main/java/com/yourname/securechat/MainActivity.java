@@ -1,4 +1,4 @@
-package com.yourname.securechat;
+package com.securechat.app;
 
 import com.getcapacitor.BridgeActivity;
 
